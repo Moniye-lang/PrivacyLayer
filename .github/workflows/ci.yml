@@ -1,0 +1,227 @@
+iname: Intelligence Driven Masking CI/CD
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main]
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
+
+jobs:
+  # ─────────────────────────────────────────────
+  # Job 1: Lint & Type Check
+  # ─────────────────────────────────────────────
+  lint-typecheck:
+    name: Lint & TypeScript Check
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run ESLint
+        run: npm run lint -- --max-warnings 0
+
+      - name: TypeScript type-check
+        run: npx tsc --noEmit
+
+  # ─────────────────────────────────────────────
+  # Job 2: Unit & Integration Tests
+  # ─────────────────────────────────────────────
+  test:
+    name: Detection Engine Tests
+    runs-on: ubuntu-latest
+    needs: lint-typecheck
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run engine test suite
+        run: npm test -- --coverage --passWithNoTests
+        env:
+          NODE_ENV: test
+
+      - name: Upload coverage report
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: coverage-report
+          path: coverage/
+
+  # ─────────────────────────────────────────────
+  # Job 3: Build Validation
+  # ─────────────────────────────────────────────
+  build:
+    name: Next.js Production Build
+    runs-on: ubuntu-latest
+    needs: [lint-typecheck, test]
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build production bundle
+        run: npm run build
+        env:
+          NEXT_TELEMETRY_DISABLED: 1
+          NODE_ENV: production
+
+      - name: Verify standalone output
+        run: |
+          if [ -d ".next/standalone" ]; then
+            echo "✅ Standalone output verified"
+          else
+            echo "❌ Standalone build missing"
+            exit 1
+          fi
+
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: nextjs-build
+          path: |
+            .next/
+            !.next/cache/
+          retention-days: 7
+
+  # ─────────────────────────────────────────────
+  # Job 4: Docker Image Build & Test
+  # ─────────────────────────────────────────────
+  docker:
+    name: Docker Build & Healthcheck
+    runs-on: ubuntu-latest
+    needs: build
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build Docker image (no push)
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ./Dockerfile
+          push: false
+          tags: intelligence-mask:ci-test
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Launch container and verify health endpoint
+        run: |
+          docker run -d --name idm-test -p 3000:3000 \
+            -e NODE_ENV=production \
+            intelligence-mask:ci-test
+
+          echo "Waiting for application to start..."
+          sleep 15
+
+          STATUS=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:3000/api/v1/health || echo "000")
+          echo "Health endpoint response: $STATUS"
+
+          if [ "$STATUS" = "200" ]; then
+            echo "✅ Container healthcheck PASSED"
+          else
+            echo "❌ Container healthcheck FAILED with status: $STATUS"
+            docker logs idm-test
+            exit 1
+          fi
+
+      - name: Test /api/v1/mask endpoint
+        run: |
+          RESPONSE=$(curl -s -X POST http://localhost:3000/api/v1/mask \
+            -H "Content-Type: application/json" \
+            -d '{"prompt": "Test with sk-proj-1234567890123456789012345678901234567890 and Project Phoenix"}')
+
+          echo "Mask API response: $RESPONSE"
+
+          if echo "$RESPONSE" | grep -q "maskedPrompt"; then
+            echo "✅ Masking API test PASSED"
+          else
+            echo "❌ Masking API test FAILED"
+            exit 1
+          fi
+
+      - name: Stop test container
+        if: always()
+        run: docker stop idm-test && docker rm idm-test
+
+  # ─────────────────────────────────────────────
+  # Job 5: Docker Registry Push (main only)
+  # ─────────────────────────────────────────────
+  docker-publish:
+    name: Push Docker Image to Registry
+    runs-on: ubuntu-latest
+    needs: docker
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract Docker metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          tags: |
+            type=ref,event=branch
+            type=sha,prefix=sha-
+            type=raw,value=latest,enable={{is_default_branch}}
+
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ./Dockerfile
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
