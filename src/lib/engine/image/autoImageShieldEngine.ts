@@ -698,6 +698,69 @@ async function blobUrlToDataUrl(blobUrl: string): Promise<string> {
 let cachedOcrWorker: any = null;
 let ocrWorkerInitPromise: Promise<any> | null = null;
 
+/**
+ * Parses SVG XML into ExtractedTextRegion items with exact text and coordinate bounds.
+ */
+export function parseSvgToRegions(svgText: string): { regions: ExtractedTextRegion[]; allWords: ExtractedWord[] } {
+  const regions: ExtractedTextRegion[] = [];
+  const allWords: ExtractedWord[] = [];
+
+  const textRegex = /<text\s+([^>]*?)>([\s\S]*?)<\/text>/gi;
+  let match: RegExpExecArray | null;
+
+  while ((match = textRegex.exec(svgText)) !== null) {
+    const attrs = match[1];
+    let rawContent = match[2]
+      .replace(/<[^>]+>/g, '') // strip nested <b>, <span>, etc.
+      .replace(/&quot;/g, '"')
+      .replace(/&apos;/g, "'")
+      .replace(/&amp;/g, '&')
+      .replace(/&lt;/g, '<')
+      .replace(/&gt;/g, '>')
+      .trim();
+
+    if (!rawContent) continue;
+
+    const xMatch = attrs.match(/\bx=["']?(\d+(?:\.\d+)?)["']?/i);
+    const yMatch = attrs.match(/\by=["']?(\d+(?:\.\d+)?)["']?/i);
+    const sizeMatch = attrs.match(/font-size=["']?(\d+(?:\.\d+)?)["']?/i);
+
+    const x = xMatch ? parseFloat(xMatch[1]) : 50;
+    const y = yMatch ? parseFloat(yMatch[1]) : 50;
+    const fontSize = sizeMatch ? parseFloat(sizeMatch[1]) : 14;
+
+    const approxCharW = fontSize * 0.6;
+    const width = Math.max(20, Math.round(rawContent.length * approxCharW));
+    const height = Math.max(14, Math.round(fontSize * 1.3));
+    const topY = Math.max(0, Math.round(y - fontSize));
+
+    const lineWords: ExtractedWord[] = [];
+    const tokens = rawContent.split(/\s+/).filter(Boolean);
+    let curX = Math.round(x);
+
+    for (const token of tokens) {
+      const tokenW = Math.max(10, Math.round(token.length * approxCharW));
+      const wordObj: ExtractedWord = {
+        text: token,
+        rect: { x: curX, y: topY, width: tokenW, height },
+        confidence: 99,
+      };
+      lineWords.push(wordObj);
+      allWords.push(wordObj);
+      curX += tokenW + 6;
+    }
+
+    regions.push({
+      text: rawContent,
+      rect: { x: Math.round(x), y: topY, width, height },
+      confidence: 99,
+      words: lineWords,
+    });
+  }
+
+  return { regions, allWords };
+}
+
 async function getOrInitOcrWorker(): Promise<any> {
   if (cachedOcrWorker) {
     return cachedOcrWorker;
@@ -750,9 +813,24 @@ export async function autoDetectImageSensitiveRegionsServer(
 ): Promise<ImageSelection[]> {
   try {
     let imageBuffer: Buffer;
-    if (imageDataUrl.includes('base64,')) {
+    let isSvg = false;
+    let svgString = '';
+
+    if (imageDataUrl.includes('data:image/svg+xml')) {
+      isSvg = true;
+      if (imageDataUrl.includes('base64,')) {
+        svgString = Buffer.from(imageDataUrl.split('base64,')[1], 'base64').toString('utf-8');
+      } else {
+        svgString = decodeURIComponent(imageDataUrl.split('data:image/svg+xml,')[1] || imageDataUrl.split('data:image/svg+xml;charset=utf-8,')[1] || '');
+      }
+      imageBuffer = Buffer.from(svgString, 'utf-8');
+    } else if (imageDataUrl.includes('base64,')) {
       const base64Data = imageDataUrl.split('base64,')[1];
       imageBuffer = Buffer.from(base64Data, 'base64');
+      if (imageBuffer.toString('utf-8', 0, 100).includes('<svg')) {
+        isSvg = true;
+        svgString = imageBuffer.toString('utf-8');
+      }
     } else if (imageDataUrl.startsWith('http://') || imageDataUrl.startsWith('https://')) {
       const response = await fetch(imageDataUrl);
       const arrayBuffer = await response.arrayBuffer();
@@ -765,21 +843,63 @@ export async function autoDetectImageSensitiveRegionsServer(
       throw new Error('Image data buffer is empty or invalid.');
     }
 
-    // 1. Preprocessing Step: Check image dimensions, downscale (>2000px) or upscale (<600px), record scaleFactor
+    // 1. Instant Fast-Path for SVG Images (<5ms, zero worker overhead)
+    if (isSvg && svgString) {
+      const { regions, allWords } = parseSvgToRegions(svgString);
+      const svgDims = getImageBufferDimensions(imageBuffer) || { width: 900, height: 550 };
+      const fullText = regions.map((r) => r.text).join('\n');
+      const pipelineEntities = await runMultiLayerDetectionPipeline(fullText);
+
+      const selections: ImageSelection[] = [];
+      let globalIndex = 1;
+
+      for (const entity of pipelineEntities) {
+        const placeholder = `[[${entity.type}_${String(globalIndex).padStart(3, '0')}]]`;
+        const rects = findPreciseEntityBoundingBoxes(entity, regions, allWords, svgDims.width, svgDims.height, globalIndex, 0);
+
+        for (const r of rects) {
+          selections.push({
+            id: `auto_sel_${entity.type.toLowerCase()}_${globalIndex}_${Date.now()}`,
+            rect: r,
+            entityType: entity.type,
+            placeholder,
+            evidence: `Auto-detected: ${entity.reason}`,
+            priority: (entity as any).priority || 95,
+          });
+        }
+        globalIndex++;
+      }
+
+      return selections;
+    }
+
+    // 2. Preprocessing Step: Check image dimensions, downscale (>2000px) or upscale (<600px), record scaleFactor
     const preprocessing = await preprocessImageForOcr(imageBuffer);
     const realWidth = preprocessing.originalWidth;
     const realHeight = preprocessing.originalHeight;
 
     let ret: any;
-    try {
+    const runOcrWithTimeout = async (timeoutMs = 12000) => {
       const worker = await getOrInitOcrWorker();
-      ret = await worker.recognize(preprocessing.processedBuffer, {}, { blocks: true, hocr: true, tsv: true });
+      const ocrTask = worker.recognize(preprocessing.processedBuffer, {}, { blocks: true, hocr: true, tsv: true });
+      const timeoutTask = new Promise((_, reject) =>
+        setTimeout(() => reject(new Error('Serverless OCR processing timed out.')), timeoutMs)
+      );
+      return Promise.race([ocrTask, timeoutTask]);
+    };
+
+    try {
+      ret = await runOcrWithTimeout(12000);
     } catch (workerErr) {
-      console.warn('Cached OCR worker error, recreating worker...', workerErr);
+      console.warn('OCR execution error or timeout, attempting fresh worker...', workerErr);
       cachedOcrWorker = null;
       ocrWorkerInitPromise = null;
-      const freshWorker = await getOrInitOcrWorker();
-      ret = await freshWorker.recognize(preprocessing.processedBuffer, {}, { blocks: true, hocr: true, tsv: true });
+      try {
+        ret = await runOcrWithTimeout(10000);
+      } catch (retryErr) {
+        console.error('OCR failed on server:', retryErr);
+        throw new Error('Image scan timed out. Please crop the image or draw regions manually.');
+      }
     }
 
     // 2. Parse OCR Page Data & apply inverseScale so all bbox coordinates map to original native image space

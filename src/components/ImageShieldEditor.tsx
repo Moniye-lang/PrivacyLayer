@@ -13,6 +13,13 @@ import {
   Lock,
   Sparkles,
   Layers,
+  ClipboardPaste,
+  Maximize2,
+  Minimize2,
+  ZoomIn,
+  ZoomOut,
+  Camera,
+  Image as ImageIcon,
 } from 'lucide-react';
 import { EntityType, ImageRect, ImageSelection, ShieldImageResponsePayload } from '@/types';
 import { shieldImage } from '@/lib/engine/image/imageShieldEngine';
@@ -33,6 +40,69 @@ const COMMON_ENTITY_TYPES: { type: EntityType; label: string; color: string }[] 
   { type: 'CUSTOM_TERM', label: 'CUSTOM', color: 'bg-slate-700 text-slate-200 border-slate-600' },
 ];
 
+// Helper to create crisp sample SVG mock images for instant testing
+const createSampleImage = (type: 'credentials' | 'medical' | 'financial'): string => {
+  let content = '';
+  if (type === 'credentials') {
+    content = `
+      <rect width="900" height="550" fill="#0d1117" rx="16"/>
+      <rect x="20" y="20" width="860" height="40" fill="#161b22" rx="8"/>
+      <circle cx="45" cy="40" r="6" fill="#ff5f56"/>
+      <circle cx="65" cy="40" r="6" fill="#ffbd2e"/>
+      <circle cx="85" cy="40" r="6" fill="#27c93f"/>
+      <text x="120" y="44" fill="#8b949e" font-family="monospace" font-size="13">server-config.env — confidential</text>
+      
+      <text x="50" y="110" fill="#58a6ff" font-family="monospace" font-size="16" font-weight="bold"># Production Infrastructure Credentials</text>
+      <text x="50" y="160" fill="#7ee787" font-family="monospace" font-size="15">AWS_ACCESS_KEY_ID="AKIAIOSFODNN7EXAMPLE"</text>
+      <text x="50" y="210" fill="#7ee787" font-family="monospace" font-size="15">STRIPE_SECRET_KEY="sk_test_51MzMockSecretKeyForDemoTesting123456789"</text>
+      <text x="50" y="260" fill="#7ee787" font-family="monospace" font-size="15">DB_CONNECTION="mongodb+srv://admin:SecurePass99@prod-db.corp.net/main"</text>
+      <text x="50" y="310" fill="#7ee787" font-family="monospace" font-size="15">GITHUB_AUTH_TOKEN="ghp_MockSecretToken9876543210abcdefghijklmn"</text>
+      <text x="50" y="360" fill="#7ee787" font-family="monospace" font-size="15">SUPPORT_LEAD="David Miller (david.miller@enterprise.com)"</text>
+      <text x="50" y="410" fill="#7ee787" font-family="monospace" font-size="15">EMERGENCY_HOTLINE="+1-555-839-2019"</text>
+      <text x="50" y="470" fill="#8b949e" font-family="monospace" font-size="13"># Confidential: Internal deployment pipeline only</text>
+    `;
+  } else if (type === 'medical') {
+    content = `
+      <rect width="900" height="550" fill="#ffffff" rx="16"/>
+      <rect x="0" y="0" width="900" height="80" fill="#0f172a"/>
+      <text x="40" y="50" fill="#38bdf8" font-family="sans-serif" font-size="22" font-weight="bold">METROPOLITAN HEALTHCARE CLINIC</text>
+      <text x="650" y="50" fill="#94a3b8" font-family="sans-serif" font-size="14">CONFIDENTIAL PHI</text>
+
+      <text x="40" y="130" fill="#334155" font-family="sans-serif" font-size="16"><b>Patient Name:</b> Sarah Jenkins</text>
+      <text x="450" y="130" fill="#334155" font-family="sans-serif" font-size="16"><b>Date of Birth:</b> 04/18/1984</text>
+      <text x="40" y="180" fill="#334155" font-family="sans-serif" font-size="16"><b>SSN:</b> 982-44-1029</text>
+      <text x="450" y="180" fill="#334155" font-family="sans-serif" font-size="16"><b>Phone:</b> (555) 234-5678</text>
+      <text x="40" y="230" fill="#334155" font-family="sans-serif" font-size="16"><b>Email:</b> sarah.jenkins@email.com</text>
+      <text x="450" y="230" fill="#334155" font-family="sans-serif" font-size="16"><b>Medical Record #:</b> MRN-902194</text>
+
+      <rect x="40" y="270" width="820" height="2" fill="#e2e8f0"/>
+      <text x="40" y="310" fill="#0f172a" font-family="sans-serif" font-size="16" font-weight="bold">Physician Clinical Assessment:</text>
+      <text x="40" y="350" fill="#475569" font-family="sans-serif" font-size="14">Patient diagnosed with acute cardiac arrhythmia. Prescribed 50mg Metoprolol daily.</text>
+      <text x="40" y="380" fill="#475569" font-family="sans-serif" font-size="14">Attending Physician: Dr. Robert Vance, MD | License: #MD-8839201</text>
+      <rect x="40" y="430" width="820" height="70" fill="#f8fafc" rx="8" stroke="#cbd5e1"/>
+      <text x="60" y="470" fill="#64748b" font-family="sans-serif" font-size="13">WARNING: Protected Health Information subject to HIPAA Title 45 CFR.</text>
+    `;
+  } else {
+    content = `
+      <rect width="900" height="550" fill="#090d16" rx="16"/>
+      <rect x="30" y="30" width="840" height="490" fill="#111827" rx="12" stroke="#374151"/>
+      <text x="60" y="80" fill="#f59e0b" font-family="sans-serif" font-size="20" font-weight="bold">ENTERPRISE INVOICE & PAYMENT VOUCHER</text>
+      <text x="60" y="130" fill="#9ca3af" font-family="sans-serif" font-size="14">Account Holder: Marcus Aurelius Corp</text>
+      <text x="500" y="130" fill="#9ca3af" font-family="sans-serif" font-size="14">Tax ID / EIN: 84-9201948</text>
+      <text x="60" y="180" fill="#9ca3af" font-family="sans-serif" font-size="14">Billing Contact: marcus@aurelius-enterprises.com</text>
+      <text x="500" y="180" fill="#9ca3af" font-family="sans-serif" font-size="14">Routing #: 021000021</text>
+      <text x="60" y="230" fill="#9ca3af" font-family="sans-serif" font-size="14">Bank Account: 987654321048</text>
+      <text x="500" y="230" fill="#9ca3af" font-family="sans-serif" font-size="14">Credit Card: 4532 •••• •••• 8849</text>
+      <rect x="60" y="270" width="780" height="150" fill="#1f2937" rx="8"/>
+      <text x="80" y="310" fill="#e5e7eb" font-family="monospace" font-size="14">Item: Project Titan Cloud Hosting License (Enterprise Q3)</text>
+      <text x="80" y="350" fill="#e5e7eb" font-family="monospace" font-size="14">Amount Due: $24,500.00 USD</text>
+      <text x="80" y="390" fill="#10b981" font-family="monospace" font-size="14">Payment Status: PAID via Corporate Visa ending in 8849</text>
+    `;
+  }
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="900" height="550" viewBox="0 0 900 550">${content}</svg>`;
+  return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
+};
+
 export const ImageShieldEditor: React.FC = () => {
   // 1. Dynamic Image State
   const [sourceImage, setSourceImage] = useState<File | null>(null);
@@ -41,18 +111,23 @@ export const ImageShieldEditor: React.FC = () => {
   const [displayedDim, setDisplayedDim] = useState<{ width: number; height: number }>({ width: 0, height: 0 });
   const [isImageLoaded, setIsImageLoaded] = useState<boolean>(false);
 
-  // 2. Dynamic Selections State
+  // 2. Big Canvas View Controls (Zoom & Full Width Expansion)
+  const [isExpandedView, setIsExpandedView] = useState<boolean>(false);
+  const [zoomLevel, setZoomLevel] = useState<number>(100);
+  const [isDraggingFile, setIsDraggingFile] = useState<boolean>(false);
+
+  // 3. Dynamic Selections State
   const [selections, setSelections] = useState<ImageSelection[]>([]);
   const [isDrawing, setIsDrawing] = useState(false);
   const [startPoint, setStartPoint] = useState<{ x: number; y: number } | null>(null);
   const [currentRect, setCurrentRect] = useState<ImageRect | null>(null);
 
-  // 3. Pending Selection Picker State
+  // 4. Pending Selection Picker State
   const [pendingRect, setPendingRect] = useState<ImageRect | null>(null);
   const [selectedType, setSelectedType] = useState<EntityType>('API_KEY');
   const [customLabel, setCustomLabel] = useState<string>('');
 
-  // 4. Processing & Result State
+  // 5. Processing & Result State
   const [isShielding, setIsShielding] = useState(false);
   const [isAutoDetecting, setIsAutoDetecting] = useState(false);
   const [shieldedResult, setShieldedResult] = useState<ShieldImageResponsePayload | null>(null);
@@ -62,6 +137,27 @@ export const ImageShieldEditor: React.FC = () => {
 
   const containerRef = useRef<HTMLDivElement>(null);
   const imgRef = useRef<HTMLImageElement>(null);
+
+  // Global Clipboard Paste Listener (Ctrl+V anywhere in window to paste image)
+  useEffect(() => {
+    const handleGlobalPaste = (e: ClipboardEvent) => {
+      const items = e.clipboardData?.items;
+      if (!items) return;
+
+      for (let i = 0; i < items.length; i++) {
+        if (items[i].type.indexOf('image') !== -1) {
+          const file = items[i].getAsFile();
+          if (file) {
+            loadImageFromFile(file);
+            break;
+          }
+        }
+      }
+    };
+
+    window.addEventListener('paste', handleGlobalPaste);
+    return () => window.removeEventListener('paste', handleGlobalPaste);
+  }, [sourceImageUrl]);
 
   // Responsive ResizeObserver for dynamic overlay tracking
   useEffect(() => {
@@ -80,12 +176,9 @@ export const ImageShieldEditor: React.FC = () => {
     const observer = new ResizeObserver(updateDimensions);
     observer.observe(imgRef.current);
     return () => observer.disconnect();
-  }, [sourceImageUrl, isImageLoaded]);
+  }, [sourceImageUrl, isImageLoaded, zoomLevel, isExpandedView]);
 
-  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
+  const loadImageFromFile = (file: File) => {
     if (sourceImageUrl && sourceImageUrl.startsWith('blob:')) {
       URL.revokeObjectURL(sourceImageUrl);
     }
@@ -100,11 +193,48 @@ export const ImageShieldEditor: React.FC = () => {
       setRestoredImageSrc(null);
       setError(null);
       setIsImageLoaded(false);
+      setZoomLevel(100);
     };
     reader.onerror = () => {
       setError('Failed to read image file');
     };
     reader.readAsDataURL(file);
+  };
+
+  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) loadImageFromFile(file);
+  };
+
+  const loadPresetSample = (type: 'credentials' | 'medical' | 'financial') => {
+    const sampleUrl = createSampleImage(type);
+    setSourceImage(null);
+    setSourceImageUrl(sampleUrl);
+    setSelections([]);
+    setShieldedResult(null);
+    setRestoredImageSrc(null);
+    setError(null);
+    setIsImageLoaded(false);
+    setZoomLevel(100);
+  };
+
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDraggingFile(true);
+  };
+
+  const handleDragLeave = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDraggingFile(false);
+  };
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDraggingFile(false);
+    const file = e.dataTransfer.files?.[0];
+    if (file && file.type.startsWith('image/')) {
+      loadImageFromFile(file);
+    }
   };
 
   const handleImageLoad = () => {
@@ -116,6 +246,7 @@ export const ImageShieldEditor: React.FC = () => {
       setIsImageLoaded(true);
     }
   };
+
 
   // Convert client pointer position to native image resolution using single geometry helper
   const getNativeImageCoords = (e: PointerEvent<HTMLDivElement>): { x: number; y: number } => {
@@ -330,28 +461,122 @@ displayHeight=${displayedDim.height}
       )}
 
       {!sourceImageUrl ? (
-        /* WORKFLOW STATE 1: UPLOAD VIEW */
-        <div className="glass-panel relative flex flex-col items-center justify-center rounded-2xl sm:rounded-3xl border-2 border-dashed border-grey-700/80 p-6 sm:p-12 text-center transition-all hover:border-gold-500/50">
-          <input
-            type="file"
-            accept="image/png, image/jpeg, image/webp, image/gif, image/svg+xml"
-            onChange={handleFileUpload}
-            className="absolute inset-0 cursor-pointer opacity-0"
-          />
-          <div className="flex h-12 w-12 sm:h-16 sm:w-16 items-center justify-center rounded-2xl bg-gold-500/10 text-gold-400 border border-gold-500/30 shadow-glow-gold mb-3 sm:mb-4">
-            <Upload className="h-6 w-6 sm:h-8 sm:w-8" />
+        /* WORKFLOW STATE 1: UPLOAD & PRESET SELECTION VIEW */
+        <div className="space-y-6">
+          <div
+            onDragOver={handleDragOver}
+            onDragLeave={handleDragLeave}
+            onDrop={handleDrop}
+            className={`glass-panel relative flex flex-col items-center justify-center rounded-2xl sm:rounded-3xl border-2 border-dashed p-6 sm:p-12 text-center transition-all ${
+              isDraggingFile
+                ? 'border-gold-400 bg-gold-500/15 shadow-glow-gold scale-[1.01]'
+                : 'border-grey-700/80 hover:border-gold-500/50 bg-grey-950/60'
+            }`}
+          >
+            <input
+              type="file"
+              accept="image/png, image/jpeg, image/webp, image/gif, image/svg+xml"
+              onChange={handleFileUpload}
+              className="absolute inset-0 cursor-pointer opacity-0 z-10"
+            />
+            <div className="flex h-14 w-14 sm:h-18 sm:w-18 items-center justify-center rounded-2xl bg-gold-500/10 text-gold-400 border border-gold-500/30 shadow-glow-gold mb-3 sm:mb-4">
+              <Upload className="h-7 w-7 sm:h-9 sm:w-9" />
+            </div>
+            <h3 className="font-mono text-base sm:text-xl font-bold text-white">Upload, Drag & Drop, or Paste Image</h3>
+            <p className="mt-1 max-w-md text-xs text-grey-400 font-sans leading-relaxed">
+              Drag & drop screenshot or document image, press <kbd className="rounded bg-grey-800 px-1.5 py-0.5 font-mono text-[11px] text-gold-300 border border-grey-700">Ctrl+V</kbd> to paste from clipboard, or click to browse.
+            </p>
+
+            <div className="mt-5 flex flex-wrap items-center justify-center gap-3 z-20">
+              <label className="cursor-pointer rounded-xl bg-gradient-gold px-5 py-2.5 font-mono text-xs font-bold text-grey-950 shadow-glow-gold transition-all hover:scale-105 active:scale-95 flex items-center space-x-2">
+                <Upload className="h-4 w-4" />
+                <span>Select Image File</span>
+                <input
+                  type="file"
+                  accept="image/png, image/jpeg, image/webp, image/gif, image/svg+xml"
+                  onChange={handleFileUpload}
+                  className="hidden"
+                />
+              </label>
+
+              <button
+                type="button"
+                onClick={async () => {
+                  try {
+                    const items = await navigator.clipboard.read();
+                    for (const item of items) {
+                      const imageType = item.types.find((t) => t.startsWith('image/'));
+                      if (imageType) {
+                        const blob = await item.getType(imageType);
+                        const file = new File([blob], 'pasted_image.png', { type: imageType });
+                        loadImageFromFile(file);
+                        return;
+                      }
+                    }
+                    setError('No image found in clipboard. Copy an image or screenshot first.');
+                  } catch (err) {
+                    setError('Clipboard read access denied. Use Ctrl+V or file selector.');
+                  }
+                }}
+                className="rounded-xl border border-grey-700 bg-grey-900 px-4 py-2.5 font-mono text-xs font-bold text-grey-300 hover:border-gold-500/50 hover:text-white transition-all active:scale-95 flex items-center space-x-1.5"
+              >
+                <ClipboardPaste className="h-4 w-4 text-gold-400" />
+                <span>Paste from Clipboard</span>
+              </button>
+            </div>
           </div>
-          <h3 className="font-mono text-base sm:text-lg font-bold text-white">Upload Image for Shielding</h3>
-          <p className="mt-1 max-w-md text-xs text-grey-400 font-sans">
-            Take photo or upload screenshot (PNG, JPG, WebP). Tap/drag over sensitive areas to redact.
-          </p>
-          <button className="mt-4 sm:mt-6 rounded-xl bg-gradient-gold px-5 sm:px-6 py-2.5 font-mono text-xs font-bold text-grey-950 shadow-glow-gold transition-all hover:scale-105 active:scale-95">
-            Select Photo / Screenshot
-          </button>
+
+          {/* Quick Instant Demo Presets */}
+          <div className="glass-panel p-5 rounded-2xl border border-grey-800 bg-grey-950/80 space-y-3">
+            <div className="flex items-center space-x-2 text-xs font-mono font-bold text-gold-400">
+              <Sparkles className="h-4 w-4" />
+              <span>OR TEST INSTANTLY WITH A SAMPLE DOCUMENT:</span>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <button
+                onClick={() => loadPresetSample('credentials')}
+                className="flex flex-col items-start p-3.5 rounded-xl border border-grey-800 bg-grey-900/90 hover:border-gold-500/50 text-left transition-all group"
+              >
+                <div className="flex items-center space-x-2 mb-1 text-xs font-mono font-bold text-white group-hover:text-gold-300">
+                  <Lock className="h-3.5 w-3.5 text-gold-400" />
+                  <span>Server .env & Secrets</span>
+                </div>
+                <p className="text-[11px] text-grey-400 font-sans">
+                  Contains AWS keys, Stripe secret, MongoDB URI, and phone.
+                </p>
+              </button>
+
+              <button
+                onClick={() => loadPresetSample('medical')}
+                className="flex flex-col items-start p-3.5 rounded-xl border border-grey-800 bg-grey-900/90 hover:border-gold-500/50 text-left transition-all group"
+              >
+                <div className="flex items-center space-x-2 mb-1 text-xs font-mono font-bold text-white group-hover:text-gold-300">
+                  <Layers className="h-3.5 w-3.5 text-cyan-400" />
+                  <span>Medical & Patient PHI</span>
+                </div>
+                <p className="text-[11px] text-grey-400 font-sans">
+                  Contains Patient SSN, MRN, clinical diagnosis, and contact.
+                </p>
+              </button>
+
+              <button
+                onClick={() => loadPresetSample('financial')}
+                className="flex flex-col items-start p-3.5 rounded-xl border border-grey-800 bg-grey-900/90 hover:border-gold-500/50 text-left transition-all group"
+              >
+                <div className="flex items-center space-x-2 mb-1 text-xs font-mono font-bold text-white group-hover:text-gold-300">
+                  <ImageIcon className="h-3.5 w-3.5 text-amber-400" />
+                  <span>Invoice & Credit Card</span>
+                </div>
+                <p className="text-[11px] text-grey-400 font-sans">
+                  Contains Corporate EIN, bank account, routing, and card number.
+                </p>
+              </button>
+            </div>
+          </div>
         </div>
       ) : isShielding ? (
         /* WORKFLOW STATE 2: SHIELDING PROCESSING VIEW */
-        <div className="glass-panel rounded-2xl sm:rounded-3xl p-8 sm:p-12 text-center space-y-4 shadow-glow-gold flex flex-col items-center justify-center min-h-[250px] sm:min-h-[300px]">
+        <div className="glass-panel rounded-2xl sm:rounded-3xl p-8 sm:p-12 text-center space-y-4 shadow-glow-gold flex flex-col items-center justify-center min-h-[300px]">
           <RefreshCw className="h-8 w-8 sm:h-10 sm:w-10 animate-spin text-gold-400 mb-2" />
           <h3 className="font-mono text-base sm:text-lg font-bold text-white">Generating Shielded PNG Image...</h3>
           <p className="text-xs text-grey-400 font-sans max-w-sm">
@@ -402,23 +627,21 @@ displayHeight=${displayedDim.height}
             </div>
           </div>
 
-          {/* Standalone Composited Shielded PNG Output View */}
-          <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 sm:gap-6">
-            <div className="lg:col-span-12 space-y-3">
-              <div className="flex items-center justify-between font-mono text-xs">
-                <span className="font-semibold text-gold-400 flex items-center gap-2">
-                  <Lock className="h-4 w-4 text-gold-400" />
-                  Generated Shielded Image (PNG Buffer)
-                </span>
-                <span className="text-grey-500 text-[10px] sm:text-xs">{shieldedResult.entitiesCount} masked ({imageNaturalDim.width} x {imageNaturalDim.height}px)</span>
-              </div>
-              <div className="rounded-2xl border border-gold-500/40 bg-grey-950 p-2 sm:p-4 flex justify-center shadow-glow-gold overflow-x-auto">
-                <img
-                  src={shieldedResult.shieldedImageDataUrl}
-                  alt="Shielded image"
-                  className="max-h-[500px] w-auto object-contain rounded-xl shadow-2xl"
-                />
-              </div>
+          {/* Standalone Composited Shielded PNG Output View (Expansive Canvas) */}
+          <div className="space-y-3">
+            <div className="flex items-center justify-between font-mono text-xs">
+              <span className="font-semibold text-gold-400 flex items-center gap-2">
+                <Lock className="h-4 w-4 text-gold-400" />
+                Generated Shielded Image (Self-Contained PNG Buffer)
+              </span>
+              <span className="text-grey-500 text-[10px] sm:text-xs">{shieldedResult.entitiesCount} region(s) masked ({imageNaturalDim.width} x {imageNaturalDim.height}px)</span>
+            </div>
+            <div className="rounded-2xl border border-gold-500/40 bg-grey-950 p-3 sm:p-6 flex justify-center shadow-glow-gold overflow-auto min-h-[400px] max-h-[80vh]">
+              <img
+                src={shieldedResult.shieldedImageDataUrl}
+                alt="Shielded image"
+                className="max-h-[75vh] w-auto object-contain rounded-xl shadow-2xl"
+              />
             </div>
           </div>
 
@@ -429,24 +652,68 @@ displayHeight=${displayedDim.height}
                 <Eye className="h-4 w-4 text-gold-400" />
                 Losslessly Restored Image
               </span>
-              <div className="rounded-2xl border border-grey-700 bg-grey-950 p-2 sm:p-4 flex justify-center overflow-x-auto">
-                <img src={restoredImageSrc} alt="Restored" className="max-h-[500px] w-auto object-contain rounded-xl" />
+              <div className="rounded-2xl border border-grey-700 bg-grey-950 p-3 sm:p-6 flex justify-center overflow-auto min-h-[300px] max-h-[80vh]">
+                <img src={restoredImageSrc} alt="Restored" className="max-h-[75vh] w-auto object-contain rounded-xl" />
               </div>
             </div>
           )}
         </div>
       ) : (
-        /* WORKFLOW STATE 4: INTERACTIVE CANVAS EDITOR VIEW */
-        <div className="grid grid-cols-1 gap-6 lg:grid-cols-12">
-          {/* Main Interactive Canvas Viewer */}
-          <div className="lg:col-span-8 flex flex-col space-y-4">
+        /* WORKFLOW STATE 4: INTERACTIVE CANVAS EDITOR VIEW (BIG & EXPANDABLE) */
+        <div className={`grid grid-cols-1 gap-6 ${isExpandedView ? 'lg:grid-cols-12' : 'lg:grid-cols-12'}`}>
+          {/* Main Interactive Canvas Viewer (Expands up to full width in expanded view) */}
+          <div className={`${isExpandedView ? 'lg:col-span-12' : 'lg:col-span-8'} flex flex-col space-y-4`}>
             <div className="glass-panel relative overflow-hidden rounded-2xl sm:rounded-3xl p-3 sm:p-4 border-grey-800">
-              <div className="flex items-center justify-between pb-3 border-b border-grey-800 mb-3 font-mono text-xs text-grey-400">
-                <span className="flex items-center space-x-1.5 sm:space-x-2">
-                  <Layers className="h-4 w-4 text-gold-400" />
-                  <span className="truncate max-w-[150px] sm:max-w-none">Canvas ({imageNaturalDim.width} x {imageNaturalDim.height}px)</span>
-                </span>
+              {/* Canvas Header Controls: Zoom, Auto-Detect, Fullscreen Toggle */}
+              <div className="flex flex-wrap items-center justify-between pb-3 border-b border-grey-800 mb-3 font-mono text-xs text-grey-400 gap-2">
                 <div className="flex items-center space-x-2">
+                  <Layers className="h-4 w-4 text-gold-400" />
+                  <span className="font-semibold text-grey-200">
+                    Canvas ({imageNaturalDim.width} x {imageNaturalDim.height}px)
+                  </span>
+                </div>
+
+                <div className="flex items-center space-x-2">
+                  {/* Zoom Controls */}
+                  <div className="flex items-center space-x-1 rounded-lg bg-grey-900 border border-grey-800 px-1 py-0.5">
+                    <button
+                      onClick={() => setZoomLevel((z) => Math.max(50, z - 25))}
+                      className="p-1 rounded hover:bg-grey-800 text-grey-400 hover:text-white"
+                      title="Zoom Out"
+                    >
+                      <ZoomOut className="h-3.5 w-3.5" />
+                    </button>
+                    <span className="px-1 text-[10px] font-mono text-grey-300 min-w-[36px] text-center">
+                      {zoomLevel}%
+                    </span>
+                    <button
+                      onClick={() => setZoomLevel((z) => Math.min(200, z + 25))}
+                      className="p-1 rounded hover:bg-grey-800 text-grey-400 hover:text-white"
+                      title="Zoom In"
+                    >
+                      <ZoomIn className="h-3.5 w-3.5" />
+                    </button>
+                    {zoomLevel !== 100 && (
+                      <button
+                        onClick={() => setZoomLevel(100)}
+                        className="text-[9px] px-1 text-gold-400 hover:underline"
+                      >
+                        Reset
+                      </button>
+                    )}
+                  </div>
+
+                  {/* Expand / Minimize Toggle */}
+                  <button
+                    onClick={() => setIsExpandedView(!isExpandedView)}
+                    className="flex items-center space-x-1 rounded-lg bg-grey-900 border border-grey-800 px-2.5 py-1 text-xs text-grey-300 hover:text-white transition-all"
+                    title={isExpandedView ? 'Show Sidebar' : 'Expand Full Width'}
+                  >
+                    {isExpandedView ? <Minimize2 className="h-3.5 w-3.5" /> : <Maximize2 className="h-3.5 w-3.5" />}
+                    <span className="hidden sm:inline">{isExpandedView ? 'Standard View' : 'Wide View'}</span>
+                  </button>
+
+                  {/* Auto-Detect */}
                   <button
                     onClick={handleAutoDetect}
                     disabled={isAutoDetecting || !isImageLoaded}
@@ -462,12 +729,20 @@ displayHeight=${displayedDim.height}
                 </div>
               </div>
 
-              <div className="flex justify-center bg-grey-950/80 rounded-xl sm:rounded-2xl p-2 select-none overflow-x-auto">
+              {/* Big Responsive Image Canvas Container */}
+              <div className={`flex justify-center bg-grey-950/90 rounded-xl sm:rounded-2xl p-3 sm:p-6 select-none overflow-auto min-h-[450px] ${
+                isExpandedView ? 'max-h-[85vh]' : 'max-h-[75vh]'
+              }`}>
                 <div
                   ref={containerRef}
                   onPointerDown={handlePointerDown}
                   onPointerMove={handlePointerMove}
                   onPointerUp={handlePointerUp}
+                  style={{
+                    transform: `scale(${zoomLevel / 100})`,
+                    transformOrigin: 'top center',
+                    transition: 'transform 0.15s ease-out',
+                  }}
                   className="relative inline-block cursor-crosshair select-none touch-none"
                 >
                   <img
@@ -475,7 +750,7 @@ displayHeight=${displayedDim.height}
                     src={sourceImageUrl}
                     alt="Original workspace"
                     onLoad={handleImageLoad}
-                    className="max-h-[500px] w-auto block object-contain pointer-events-none rounded-xl"
+                    className="max-h-[75vh] w-auto block object-contain pointer-events-none rounded-xl shadow-2xl"
                   />
 
                   {/* Confirmed Selections Dynamic Overlay */}
@@ -491,14 +766,14 @@ displayHeight=${displayedDim.height}
                         <div
                           key={sel.id}
                           style={style}
-                          className="absolute border border-gold-500/60 bg-gold-500/15 rounded-sm flex items-center justify-center group pointer-events-auto overflow-hidden cursor-pointer"
+                          className="absolute border-2 border-gold-500/80 bg-gold-500/20 rounded-sm flex items-center justify-center group pointer-events-auto overflow-hidden cursor-pointer shadow-sm"
                           onClick={(e) => {
                             e.stopPropagation();
                             removeSelection(sel.id);
                           }}
                           title="Tap or click to remove redacted region"
                         >
-                          <span className="font-mono text-[9px] leading-none font-bold text-gold-300 bg-grey-950/90 px-1 py-0.5 rounded border border-gold-500/40 truncate max-w-full">
+                          <span className="font-mono text-[10px] leading-none font-bold text-gold-300 bg-grey-950/95 px-1.5 py-0.5 rounded border border-gold-500/40 truncate max-w-full">
                             {displayLabel}
                           </span>
                           <button
@@ -506,7 +781,7 @@ displayHeight=${displayedDim.height}
                               e.stopPropagation();
                               removeSelection(sel.id);
                             }}
-                            className="absolute -top-1 -right-1 flex sm:hidden sm:group-hover:flex h-4 w-4 items-center justify-center rounded-full bg-rose-500 text-white text-[10px] shadow-md"
+                            className="absolute -top-1 -right-1 flex h-4 w-4 items-center justify-center rounded-full bg-rose-500 text-white text-[10px] shadow-md"
                           >
                             ×
                           </button>
@@ -526,11 +801,11 @@ displayHeight=${displayedDim.height}
             </div>
           </div>
 
-          {/* Right Sidebar: Selections & Actions */}
-          <div className="lg:col-span-4 flex flex-col space-y-6">
+          {/* Sidebar / Bottom Actions (Spans 4 columns or 12 in expanded mode) */}
+          <div className={`${isExpandedView ? 'lg:col-span-12' : 'lg:col-span-4'} flex flex-col space-y-5`}>
             {/* Pending Selection Entity Type Picker */}
             {pendingRect && (
-              <div className="glass-panel p-5 rounded-3xl border-gold-500/50 space-y-4 shadow-glow-gold">
+              <div className="glass-panel p-5 rounded-2xl sm:rounded-3xl border-gold-500/50 space-y-4 shadow-glow-gold">
                 <h4 className="font-mono text-sm font-bold text-white flex items-center gap-2">
                   <Sparkles className="h-4 w-4 text-gold-400" />
                   Assign Entity Type
@@ -539,7 +814,7 @@ displayHeight=${displayedDim.height}
                   Select entity placeholder for region ({pendingRect.width} x {pendingRect.height}px):
                 </p>
 
-                <div className="grid grid-cols-2 gap-2 max-h-48 overflow-y-auto pr-1">
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 max-h-48 overflow-y-auto pr-1">
                   {COMMON_ENTITY_TYPES.map((t) => (
                     <button
                       key={t.type}
@@ -568,7 +843,7 @@ displayHeight=${displayedDim.height}
                 <div className="flex space-x-2 pt-2">
                   <button
                     onClick={confirmSelection}
-                    className="flex-1 rounded-xl bg-gradient-gold px-4 py-2 font-mono text-xs font-bold text-grey-950 shadow-glow-gold hover:scale-[1.02] transition-all"
+                    className="flex-1 rounded-xl bg-gradient-gold px-4 py-2 font-mono text-xs font-bold text-grey-950 shadow-glow-gold hover:scale-[1.02] active:scale-95 transition-all"
                   >
                     Confirm Region
                   </button>
@@ -582,12 +857,12 @@ displayHeight=${displayedDim.height}
               </div>
             )}
 
-            {/* Active Selections List */}
-            <div className="glass-panel p-5 rounded-3xl border-grey-800 space-y-4">
+            {/* Active Selections List & Shield Action */}
+            <div className="glass-panel p-5 rounded-2xl sm:rounded-3xl border-grey-800 space-y-4">
               <div className="flex items-center justify-between">
                 <h4 className="font-mono text-sm font-bold text-white flex items-center gap-2">
                   <Lock className="h-4 w-4 text-gold-400" />
-                  Selections ({selections.length})
+                  Redacted Regions ({selections.length})
                 </h4>
                 {selections.length > 0 && (
                   <button
@@ -600,25 +875,28 @@ displayHeight=${displayedDim.height}
               </div>
 
               {selections.length === 0 ? (
-                <p className="text-xs text-grey-500 font-mono italic">No region selections made yet. Click & drag on image.</p>
+                <p className="text-xs text-grey-500 font-mono italic">
+                  No selections yet. Click & drag on the image above, or click <strong>⚡ AUTO-DETECT</strong>.
+                </p>
               ) : (
-                <div className="space-y-2.5 max-h-60 overflow-y-auto pr-1">
+                <div className="space-y-2 max-h-56 overflow-y-auto pr-1">
                   {selections.map((sel) => (
                     <div
                       key={sel.id}
-                      className="flex items-center justify-between rounded-xl border border-grey-800 bg-grey-950/60 p-3 text-xs"
+                      className="flex items-center justify-between rounded-xl border border-grey-800 bg-grey-950/60 p-2.5 text-xs"
                     >
-                      <div className="flex flex-col">
-                        <span className="font-mono font-bold text-gold-400">{sel.placeholder}</span>
+                      <div className="flex flex-col truncate pr-2">
+                        <span className="font-mono font-bold text-gold-400 truncate">{sel.placeholder}</span>
                         <span className="font-mono text-[10px] text-grey-500">
-                          x:{sel.rect.x}, y:{sel.rect.y} ({sel.rect.width}×{sel.rect.height}px)
+                          {sel.rect.width}×{sel.rect.height}px ({sel.entityType})
                         </span>
                       </div>
                       <button
                         onClick={() => removeSelection(sel.id)}
-                        className="text-grey-500 hover:text-rose-400"
+                        className="text-grey-500 hover:text-rose-400 p-1"
+                        title="Remove region"
                       >
-                        <Trash2 className="h-4 w-4" />
+                        <Trash2 className="h-3.5 w-3.5" />
                       </button>
                     </div>
                   ))}
@@ -626,21 +904,21 @@ displayHeight=${displayedDim.height}
               )}
 
               {/* Action Buttons */}
-              <div className="pt-4 flex flex-col space-y-2">
+              <div className="pt-2 flex flex-col space-y-2">
                 <button
                   type="button"
                   onClick={handleShield}
                   disabled={!sourceImageUrl || selections.length === 0 || !isImageLoaded || isShielding}
-                  className="w-full rounded-xl bg-gradient-gold py-3 font-mono text-xs font-bold text-grey-950 shadow-glow-gold disabled:opacity-50 transition-all hover:scale-105"
+                  className="w-full rounded-xl bg-gradient-gold py-3.5 font-mono text-xs font-extrabold text-grey-950 shadow-glow-gold disabled:opacity-50 transition-all hover:scale-[1.02] active:scale-95"
                 >
-                  {isShielding ? 'Generating Shielded Image...' : 'Shield Image Now'}
+                  {isShielding ? 'Generating Shielded Image...' : `🛡️ Shield Image (${selections.length} Regions)`}
                 </button>
                 <button
                   type="button"
                   onClick={handleReset}
-                  className="w-full rounded-xl border border-grey-800 py-2 font-mono text-xs text-grey-400 hover:bg-grey-800/60"
+                  className="w-full rounded-xl border border-grey-800 py-2.5 font-mono text-xs text-grey-400 hover:bg-grey-800/60 transition-all"
                 >
-                  Upload New Image
+                  Upload Another Image
                 </button>
               </div>
             </div>
@@ -650,3 +928,4 @@ displayHeight=${displayedDim.height}
     </div>
   );
 };
+

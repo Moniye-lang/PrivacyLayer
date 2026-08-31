@@ -1,4 +1,6 @@
 import { ImageSelection } from '../../../types';
+import { parseSvgToRegions } from './svgParser';
+import { runMultiLayerDetectionPipeline } from '../multiLayerPipeline';
 
 /**
  * Helper to convert a browser blob: URL to a Base64 data URL
@@ -25,9 +27,14 @@ async function blobUrlToDataUrl(blobUrl: string): Promise<string> {
  */
 async function optimizeImageForScan(
   dataUrl: string,
-  maxDimension = 1600
+  maxDimension = 1400
 ): Promise<{ scanUrl: string; scaleFactor: number }> {
   if (typeof window === 'undefined' || typeof document === 'undefined') {
+    return { scanUrl: dataUrl, scaleFactor: 1.0 };
+  }
+
+  // If SVG, return immediately with zero downscaling
+  if (dataUrl.includes('data:image/svg+xml') || dataUrl.includes('<svg')) {
     return { scanUrl: dataUrl, scaleFactor: 1.0 };
   }
 
@@ -55,7 +62,7 @@ async function optimizeImageForScan(
       }
 
       ctx.drawImage(img, 0, 0, scanW, scanH);
-      const scanUrl = canvas.toDataURL('image/jpeg', 0.95);
+      const scanUrl = canvas.toDataURL('image/jpeg', 0.90);
       resolve({ scanUrl, scaleFactor });
     };
     img.onerror = () => resolve({ scanUrl: dataUrl, scaleFactor: 1.0 });
@@ -65,7 +72,8 @@ async function optimizeImageForScan(
 
 /**
  * Client-Side Auto-Detect Trigger.
- * Calls the secure backend OCR endpoint /api/v1/mask/image/auto-detect.
+ * 1. Instant client-side SVG fast path (<5ms)
+ * 2. High-speed serverless OCR API with strict 12s timeout
  */
 export async function autoDetectImageSensitiveRegions(
   imageDataUrl: string,
@@ -80,14 +88,54 @@ export async function autoDetectImageSensitiveRegions(
     }
   }
 
-  const { scanUrl, scaleFactor } = await optimizeImageForScan(payloadUrl, 1600);
+  // 1. Instant Client-Side Fast Path for SVG Images (<5ms)
+  if (payloadUrl.includes('data:image/svg+xml') || payloadUrl.includes('<svg')) {
+    try {
+      let svgText = '';
+      if (payloadUrl.includes('base64,')) {
+        svgText = atob(payloadUrl.split('base64,')[1]);
+      } else {
+        svgText = decodeURIComponent(payloadUrl.split('data:image/svg+xml,')[1] || payloadUrl.split('data:image/svg+xml;charset=utf-8,')[1] || payloadUrl);
+      }
+
+      const { regions, allWords } = parseSvgToRegions(svgText);
+      const fullText = regions.map((r) => r.text).join('\n');
+      const pipelineEntities = await runMultiLayerDetectionPipeline(fullText);
+
+      const selections: ImageSelection[] = [];
+      let globalIndex = 1;
+
+      for (const entity of pipelineEntities) {
+        const placeholder = `[[${entity.type}_${String(globalIndex).padStart(3, '0')}]]`;
+        const matched = regions.find((r) => r.text.toLowerCase().includes(entity.text.toLowerCase()));
+        if (matched) {
+          selections.push({
+            id: `auto_sel_${entity.type.toLowerCase()}_${globalIndex}_${Date.now()}`,
+            rect: matched.rect,
+            entityType: entity.type,
+            placeholder,
+            evidence: `Auto-detected: ${entity.reason}`,
+            priority: (entity as any).priority || 95,
+          });
+        }
+        globalIndex++;
+      }
+
+      if (selections.length > 0) return selections;
+    } catch (e) {
+      console.warn('Client SVG fast-path fallback to server:', e);
+    }
+  }
+
+  // 2. Serverless OCR Scanning with 12s Timeout Protection
+  const { scanUrl, scaleFactor } = await optimizeImageForScan(payloadUrl, 1400);
 
   const controller = new AbortController();
   let isTimedOut = false;
   const timeoutId = setTimeout(() => {
     isTimedOut = true;
     controller.abort();
-  }, 60000);
+  }, 12000);
 
   try {
     const res = await fetch('/api/v1/mask/image/auto-detect', {
@@ -102,7 +150,7 @@ export async function autoDetectImageSensitiveRegions(
     const data = await res.json().catch(() => ({}));
 
     if (!res.ok) {
-      throw new Error(data.error || `Server auto-detect request failed (status ${res.status})`);
+      throw new Error(data.error || `Server auto-detect returned status ${res.status}`);
     }
 
     if (data.success && Array.isArray(data.selections)) {
@@ -123,13 +171,11 @@ export async function autoDetectImageSensitiveRegions(
     return [];
   } catch (e: any) {
     clearTimeout(timeoutId);
-    if (e?.name === 'AbortError') {
-      if (isTimedOut) {
-        throw new Error('Image scan timed out after 60s. Please try again or crop the image.');
-      }
-      throw new Error('Image scan request was interrupted or cancelled. Please click auto-detect again.');
+    if (e?.name === 'AbortError' || isTimedOut) {
+      throw new Error('Image scan timed out after 12s. Please drag boxes over sensitive text manually or crop the image.');
     }
     console.error('Browser auto-detect error:', e);
     throw new Error(e?.message || 'Failed to auto-detect sensitive regions from server');
   }
 }
+
