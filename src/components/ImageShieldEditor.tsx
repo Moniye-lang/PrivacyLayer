@@ -257,7 +257,7 @@ export const ImageShieldEditor: React.FC = () => {
   };
 
   const handlePointerDown = (e: PointerEvent<HTMLDivElement>) => {
-    if (!sourceImageUrl || pendingRect || !isImageLoaded) return;
+    if (!sourceImageUrl || !isImageLoaded) return;
     const coords = getNativeImageCoords(e);
     setStartPoint(coords);
     setIsDrawing(true);
@@ -277,12 +277,74 @@ export const ImageShieldEditor: React.FC = () => {
   };
 
   const handlePointerUp = () => {
-    if (!isDrawing || !currentRect) return;
+    if (!isDrawing || !startPoint) return;
     setIsDrawing(false);
 
-    if (currentRect.width > 10 && currentRect.height > 10) {
-      setPendingRect(currentRect);
+    let committedRect: ImageRect;
+
+    if (currentRect && (currentRect.width > 8 || currentRect.height > 8)) {
+      // 1. Drag-to-Mask: User dragged a custom boundary box
+      committedRect = { ...currentRect };
+    } else {
+      // 2. Tap-to-Mask: Smart 1-Tap Line & Word Snapping (Ideal for mobile screens)
+      const natW = imageNaturalDim.width || 800;
+      const natH = imageNaturalDim.height || 600;
+
+      // Check if tap fell inside an existing selection (tap to delete)
+      const tappedExisting = selections.find(
+        (s) =>
+          startPoint.x >= s.rect.x &&
+          startPoint.x <= s.rect.x + s.rect.width &&
+          startPoint.y >= s.rect.y &&
+          startPoint.y <= s.rect.y + s.rect.height
+      );
+
+      if (tappedExisting) {
+        removeSelection(tappedExisting.id);
+        setCurrentRect(null);
+        setStartPoint(null);
+        if (typeof window !== 'undefined' && 'vibrate' in navigator) {
+          try { navigator.vibrate(10); } catch {}
+        }
+        return;
+      }
+
+      // Compute smart line-proportional box centered on tap point
+      const smartW = Math.max(120, Math.min(340, Math.round(natW * 0.28)));
+      const smartH = Math.max(26, Math.min(48, Math.round(natH * 0.055)));
+
+      const targetX = Math.max(0, Math.min(natW - smartW, Math.round(startPoint.x - smartW / 2)));
+      const targetY = Math.max(0, Math.min(natH - smartH, Math.round(startPoint.y - smartH / 2)));
+
+      committedRect = {
+        x: targetX,
+        y: targetY,
+        width: smartW,
+        height: smartH,
+      };
     }
+
+    const typeKey = selectedType === 'CUSTOM_TERM' && customLabel.trim() ? customLabel.trim().toUpperCase() : selectedType;
+    const existingCount = selections.filter((s) => s.entityType === selectedType).length;
+    const counterStr = String(existingCount + 1).padStart(3, '0');
+    const placeholder = `[[${typeKey}_${counterStr}]]`;
+
+    const newSelection: ImageSelection = {
+      id: `sel_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
+      rect: committedRect,
+      entityType: selectedType,
+      customLabel: customLabel.trim() || undefined,
+      placeholder,
+      evidence: 'Manual user selection (Tap-to-Mask)',
+      priority: 100,
+    };
+
+    setSelections((prev) => [...prev, newSelection]);
+
+    if (typeof window !== 'undefined' && 'vibrate' in navigator) {
+      try { navigator.vibrate(15); } catch {}
+    }
+
     setCurrentRect(null);
     setStartPoint(null);
   };
@@ -775,6 +837,29 @@ displayHeight=${displayedDim.height}
                     <span>AUTO-SHIELD</span>
                   </button>
                 </div>
+              </div>
+
+              {/* Active Drawing Tool Category Palette */}
+              <div className="flex items-center space-x-1.5 overflow-x-auto pb-2.5 mb-2 border-b border-grey-850 font-mono text-[11px] scrollbar-none">
+                <span className="text-grey-400 font-bold shrink-0 text-[10px] uppercase tracking-wider pl-1">
+                  Active Tool:
+                </span>
+                {COMMON_ENTITY_TYPES.slice(0, 6).map((t) => (
+                  <button
+                    key={t.type}
+                    onClick={() => setSelectedType(t.type)}
+                    className={`px-2.5 py-1 rounded-lg border transition-all shrink-0 font-bold ${
+                      selectedType === t.type
+                        ? 'border-gold-500 bg-gold-500/20 text-gold-300 shadow-glow-gold scale-105'
+                        : 'border-grey-800 bg-grey-900/60 text-grey-400 hover:border-grey-700 hover:text-grey-200'
+                    }`}
+                  >
+                    {t.label}
+                  </button>
+                ))}
+                <span className="text-[10px] text-grey-500 font-sans hidden md:inline pl-2 italic shrink-0">
+                  💡 Tap anywhere on text to drop a mask, or drag to size.
+                </span>
               </div>
 
               {/* Big Responsive Image Canvas Container */}

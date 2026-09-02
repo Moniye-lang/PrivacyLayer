@@ -156,45 +156,138 @@ export const ShieldWorkspace: React.FC = () => {
     }
   };
 
-  // Add Manual Override (Mask)
+  // Add Manual Override (Mask) with Line-Aware Multi-Line Splitting
   const addManualMask = (type: EntityType = 'CUSTOM_TERM') => {
     if (!selectedText || !selectionRange) return;
-    learnedCacheStore.addCustomTerm(selectedText, type);
-    if (!customTerms.includes(selectedText)) {
-      setCustomTerms([...customTerms, selectedText]);
+
+    const rawSelected = rawPrompt.substring(selectionRange.start, selectionRange.end);
+    const lines = rawSelected.split('\n');
+
+    if (lines.length > 1) {
+      const newOverrides: ManualOverride[] = [];
+      const newCustomTerms: string[] = [...customTerms];
+      let currentPos = selectionRange.start;
+
+      for (const line of lines) {
+        const trimmed = line.trim();
+        if (trimmed.length > 0) {
+          const lineStartOffset = line.indexOf(trimmed);
+          const lineStart = currentPos + (lineStartOffset >= 0 ? lineStartOffset : 0);
+          const lineEnd = lineStart + trimmed.length;
+
+          learnedCacheStore.addCustomTerm(trimmed, type);
+          if (!newCustomTerms.includes(trimmed)) {
+            newCustomTerms.push(trimmed);
+          }
+
+          newOverrides.push({
+            text: trimmed,
+            start: lineStart,
+            end: lineEnd,
+            action: 'MASK',
+            type,
+          });
+        }
+        currentPos += line.length + 1; // +1 for \n delimiter
+      }
+
+      setCustomTerms(newCustomTerms);
+      setManualOverrides([
+        ...manualOverrides.filter(
+          (o) => Math.max(o.start, selectionRange.start) >= Math.min(o.end, selectionRange.end)
+        ),
+        ...newOverrides,
+      ]);
+      triggerHaptic();
+      showToast(`Multi-line manual override: ${newOverrides.length} line(s) masked as ${type.replace(/_/g, ' ').toLowerCase()}.`);
+    } else {
+      const trimmed = selectedText.trim();
+      learnedCacheStore.addCustomTerm(trimmed, type);
+      if (!customTerms.includes(trimmed)) {
+        setCustomTerms([...customTerms, trimmed]);
+      }
+
+      const trimmedOffset = rawSelected.indexOf(trimmed);
+      const exactStart = selectionRange.start + (trimmedOffset >= 0 ? trimmedOffset : 0);
+      const exactEnd = exactStart + trimmed.length;
+
+      setManualOverrides([
+        ...manualOverrides.filter(
+          (o) => Math.max(o.start, exactStart) >= Math.min(o.end, exactEnd)
+        ),
+        {
+          text: trimmed,
+          start: exactStart,
+          end: exactEnd,
+          action: 'MASK',
+          type,
+        },
+      ]);
+      triggerHaptic();
+      showToast(`Manual override: "${trimmed}" masked as ${type.replace(/_/g, ' ').toLowerCase()}.`);
     }
-    setManualOverrides([
-      ...manualOverrides.filter(
-        (o) => Math.max(o.start, selectionRange.start) >= Math.min(o.end, selectionRange.end)
-      ),
-      {
-        text: selectedText,
-        start: selectionRange.start,
-        end: selectionRange.end,
-        action: 'MASK',
-        type,
-      },
-    ]);
-    triggerHaptic();
-    showToast(`Manual override: "${selectedText}" masked as ${type.replace(/_/g, ' ').toLowerCase()}.`);
+
     setSelectedText('');
     setSelectionRange(null);
   };
 
-  // Add Manual Override (Unmask)
+  // Add Manual Override (Unmask) with Line-Aware Multi-Line Splitting
   const addManualUnmask = () => {
     if (!selectedText || !selectionRange) return;
-    setManualOverrides([
-      ...manualOverrides,
-      {
-        text: selectedText,
-        start: selectionRange.start,
-        end: selectionRange.end,
-        action: 'UNMASK',
-      },
-    ]);
-    triggerHaptic();
-    showToast(`Manual override: "${selectedText}" excluded from masking.`);
+
+    const rawSelected = rawPrompt.substring(selectionRange.start, selectionRange.end);
+    const lines = rawSelected.split('\n');
+
+    if (lines.length > 1) {
+      const newOverrides: ManualOverride[] = [];
+      let currentPos = selectionRange.start;
+
+      for (const line of lines) {
+        const trimmed = line.trim();
+        if (trimmed.length > 0) {
+          const lineStartOffset = line.indexOf(trimmed);
+          const lineStart = currentPos + (lineStartOffset >= 0 ? lineStartOffset : 0);
+          const lineEnd = lineStart + trimmed.length;
+
+          newOverrides.push({
+            text: trimmed,
+            start: lineStart,
+            end: lineEnd,
+            action: 'UNMASK',
+          });
+        }
+        currentPos += line.length + 1;
+      }
+
+      setManualOverrides([
+        ...manualOverrides.filter(
+          (o) => Math.max(o.start, selectionRange.start) >= Math.min(o.end, selectionRange.end)
+        ),
+        ...newOverrides,
+      ]);
+      triggerHaptic();
+      showToast(`Multi-line manual override: ${newOverrides.length} line(s) excluded from masking.`);
+    } else {
+      const trimmed = selectedText.trim();
+      const trimmedOffset = rawSelected.indexOf(trimmed);
+      const exactStart = selectionRange.start + (trimmedOffset >= 0 ? trimmedOffset : 0);
+      const exactEnd = exactStart + trimmed.length;
+
+      setManualOverrides([
+        ...manualOverrides.filter(
+          (o) => Math.max(o.start, exactStart) >= Math.min(o.end, exactEnd)
+        ),
+        {
+          text: trimmed,
+          start: exactStart,
+          end: exactEnd,
+          action: 'UNMASK',
+        },
+      ]);
+      triggerHaptic();
+      showToast(`Manual override: "${trimmed}" excluded from masking.`);
+    }
+
     setSelectedText('');
     setSelectionRange(null);
   };
