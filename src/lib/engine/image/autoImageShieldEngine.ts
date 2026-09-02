@@ -304,7 +304,7 @@ export async function preprocessImageForOcr(imageBuffer: Buffer): Promise<Prepro
  * Applies inverseScale to ensure all returned bbox coordinates are mapped
  * back to the ORIGINAL image's native pixel coordinate space.
  */
-function parseTesseractPageData(
+export function parseTesseractPageData(
   pageData: any,
   realWidth: number,
   realHeight: number,
@@ -903,7 +903,7 @@ export async function autoDetectImageSensitiveRegionsServer(
     const realHeight = preprocessing.originalHeight;
 
     let ret: any;
-    const runOcrWithTimeout = async (timeoutMs = 12000) => {
+    const runOcrWithTimeout = async (timeoutMs = 35000) => {
       const worker = await getOrInitOcrWorker();
       const ocrTask = worker.recognize(preprocessing.processedBuffer, {}, { blocks: true, hocr: true, tsv: true });
       const timeoutTask = new Promise((_, reject) =>
@@ -913,13 +913,13 @@ export async function autoDetectImageSensitiveRegionsServer(
     };
 
     try {
-      ret = await runOcrWithTimeout(12000);
+      ret = await runOcrWithTimeout(35000);
     } catch (workerErr) {
       console.warn('OCR execution error or timeout, attempting fresh worker...', workerErr);
       cachedOcrWorker = null;
       ocrWorkerInitPromise = null;
       try {
-        ret = await runOcrWithTimeout(10000);
+        ret = await runOcrWithTimeout(20000);
       } catch (retryErr) {
         console.error('OCR failed on server:', retryErr);
         throw new Error('Image scan timed out. Please crop the image or draw regions manually.');
