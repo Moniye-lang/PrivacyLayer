@@ -357,6 +357,44 @@ displayHeight=${displayedDim.height}
     }
   };
 
+  const handleAutoShield = async () => {
+    if (!sourceImageUrl || isAutoDetecting || isShielding) return;
+    setIsAutoDetecting(true);
+    setError(null);
+    try {
+      const autoSelections = await autoDetectImageSensitiveRegions(sourceImageUrl);
+      if (autoSelections.length === 0) {
+        setError('No sensitive text regions detected in image.');
+        setIsAutoDetecting(false);
+        return;
+      }
+      setSelections(autoSelections);
+      setIsAutoDetecting(false);
+
+      setIsShielding(true);
+      const currentDisplayed = imgRef.current
+        ? { width: imgRef.current.clientWidth, height: imgRef.current.clientHeight }
+        : displayedDim;
+
+      const selectionsWithDim = autoSelections.map((s) => ({
+        ...s,
+        displayedDim: s.displayedDim || currentDisplayed,
+      }));
+
+      const result = await shieldImage({
+        imageDataUrl: sourceImageUrl,
+        selections: selectionsWithDim,
+      });
+      setShieldedResult(result);
+    } catch (err: any) {
+      const msg = err instanceof Error ? err.message : (typeof err === 'string' ? err : err?.message || err?.error || 'Failed to auto-shield image');
+      setError('Auto-Shield failed: ' + msg);
+    } finally {
+      setIsAutoDetecting(false);
+      setIsShielding(false);
+    }
+  };
+
   const handleShield = async () => {
     if (!sourceImageUrl || selections.length === 0 || isShielding) return;
 
@@ -716,7 +754,7 @@ displayHeight=${displayedDim.height}
                   {/* Auto-Detect */}
                   <button
                     onClick={handleAutoDetect}
-                    disabled={isAutoDetecting || !isImageLoaded}
+                    disabled={isAutoDetecting || isShielding || !isImageLoaded}
                     className="flex items-center space-x-1.5 rounded-lg bg-gold-500/15 px-2.5 sm:px-3 py-1 text-xs font-bold text-gold-400 border border-gold-500/40 hover:bg-gold-500/25 active:scale-95 transition-all disabled:opacity-50 shadow-glow-gold whitespace-nowrap"
                   >
                     {isAutoDetecting ? (
@@ -725,6 +763,16 @@ displayHeight=${displayedDim.height}
                       <Sparkles className="h-3.5 w-3.5 text-gold-400" />
                     )}
                     <span>{isAutoDetecting ? 'Scanning...' : '⚡ AUTO-DETECT'}</span>
+                  </button>
+
+                  {/* 1-Click Auto-Shield */}
+                  <button
+                    onClick={handleAutoShield}
+                    disabled={isAutoDetecting || isShielding || !isImageLoaded}
+                    className="flex items-center space-x-1.5 rounded-lg bg-gradient-gold px-2.5 sm:px-3 py-1 text-xs font-extrabold text-grey-950 shadow-glow-gold hover:scale-105 active:scale-95 transition-all disabled:opacity-50 whitespace-nowrap"
+                  >
+                    <Shield className="h-3.5 w-3.5" />
+                    <span>AUTO-SHIELD</span>
                   </button>
                 </div>
               </div>
@@ -905,14 +953,40 @@ displayHeight=${displayedDim.height}
 
               {/* Action Buttons */}
               <div className="pt-2 flex flex-col space-y-2">
-                <button
-                  type="button"
-                  onClick={handleShield}
-                  disabled={!sourceImageUrl || selections.length === 0 || !isImageLoaded || isShielding}
-                  className="w-full rounded-xl bg-gradient-gold py-3.5 font-mono text-xs font-extrabold text-grey-950 shadow-glow-gold disabled:opacity-50 transition-all hover:scale-[1.02] active:scale-95"
-                >
-                  {isShielding ? 'Generating Shielded Image...' : `🛡️ Shield Image (${selections.length} Regions)`}
-                </button>
+                {selections.length === 0 ? (
+                  <button
+                    type="button"
+                    onClick={handleAutoShield}
+                    disabled={!sourceImageUrl || !isImageLoaded || isAutoDetecting || isShielding}
+                    className="w-full rounded-xl bg-gradient-gold py-3.5 font-mono text-xs font-extrabold text-grey-950 shadow-glow-gold disabled:opacity-50 transition-all hover:scale-[1.02] active:scale-95 flex items-center justify-center space-x-2"
+                  >
+                    {isAutoDetecting ? (
+                      <>
+                        <RefreshCw className="h-4 w-4 animate-spin text-grey-950" />
+                        <span>Auto-Detecting Regions...</span>
+                      </>
+                    ) : isShielding ? (
+                      <>
+                        <RefreshCw className="h-4 w-4 animate-spin text-grey-950" />
+                        <span>Compositing Mask...</span>
+                      </>
+                    ) : (
+                      <>
+                        <Sparkles className="h-4 w-4 text-grey-950" />
+                        <span>⚡ 1-Click Auto-Shield</span>
+                      </>
+                    )}
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={handleShield}
+                    disabled={!sourceImageUrl || selections.length === 0 || !isImageLoaded || isShielding}
+                    className="w-full rounded-xl bg-gradient-gold py-3.5 font-mono text-xs font-extrabold text-grey-950 shadow-glow-gold disabled:opacity-50 transition-all hover:scale-[1.02] active:scale-95"
+                  >
+                    {isShielding ? 'Generating Shielded Image...' : `🛡️ Shield Image (${selections.length} Regions)`}
+                  </button>
+                )}
                 <button
                   type="button"
                   onClick={handleReset}

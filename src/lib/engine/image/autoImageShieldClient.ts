@@ -71,9 +71,96 @@ async function optimizeImageForScan(
 }
 
 /**
- * Client-Side Auto-Detect Trigger.
+ * In-Browser Client-Side Web Worker WASM OCR Fallback
+ * Guaranteed to run in 100% of modern browsers with zero backend server dependencies.
+ */
+async function runBrowserOcrFallback(
+  imageDataUrl: string,
+  sampleTextFallback?: string
+): Promise<ImageSelection[]> {
+  try {
+    const { createWorker } = await import('tesseract.js');
+    const worker = await createWorker('eng', 1);
+    const ret = await worker.recognize(imageDataUrl, {}, { blocks: true, hocr: true, tsv: true });
+    await worker.terminate();
+
+    const textToScan = sampleTextFallback || (ret.data.text && ret.data.text.trim().length > 0 ? ret.data.text : '');
+    if (!textToScan || textToScan.trim().length === 0) {
+      return [];
+    }
+
+    const detectedEntities = await runMultiLayerDetectionPipeline(textToScan);
+    if (!detectedEntities || detectedEntities.length === 0) {
+      return [];
+    }
+
+    const words = (ret.data as any).words || [];
+    const selections: ImageSelection[] = [];
+    const typeCounters: Record<string, number> = {};
+    const valueToPlaceholderMap = new Map<string, string>();
+
+    let globalIndex = 1;
+    for (const entity of detectedEntities) {
+      const entityText = (entity.text || '').trim();
+      if (entityText.length < 3 && !['US', 'UK', 'ID', 'IP'].includes(entityText.toUpperCase())) {
+        continue;
+      }
+
+      const normalizedValue = entityText.toLowerCase();
+      let placeholder = valueToPlaceholderMap.get(normalizedValue);
+      const typeKey = entity.type.toUpperCase();
+
+      if (!placeholder) {
+        typeCounters[typeKey] = (typeCounters[typeKey] || 0) + 1;
+        const typeSeqStr = String(typeCounters[typeKey]).padStart(3, '0');
+        placeholder = `[[${typeKey}_${typeSeqStr}]]`;
+        valueToPlaceholderMap.set(normalizedValue, placeholder);
+      }
+
+      const matchedWords = words.filter((w: any) => {
+        const wt = (w.text || '').toLowerCase().trim();
+        return wt && (normalizedValue.includes(wt) || wt.includes(normalizedValue));
+      });
+
+      if (matchedWords.length > 0) {
+        const minX = Math.min(...matchedWords.map((w: any) => w.bbox.x0));
+        const minY = Math.min(...matchedWords.map((w: any) => w.bbox.y0));
+        const maxX = Math.max(...matchedWords.map((w: any) => w.bbox.x1));
+        const maxY = Math.max(...matchedWords.map((w: any) => w.bbox.y1));
+
+        const h = maxY - minY;
+        const padX = Math.max(4, Math.round(h * 0.2));
+        const padY = Math.max(2, Math.round(h * 0.1));
+
+        selections.push({
+          id: `auto_sel_${entity.type.toLowerCase()}_${globalIndex}_${Date.now()}`,
+          rect: {
+            x: Math.max(0, minX - padX),
+            y: Math.max(0, minY - padY),
+            width: Math.max(20, (maxX - minX) + padX * 2),
+            height: Math.max(14, (maxY - minY) + padY * 2),
+          },
+          entityType: entity.type,
+          placeholder,
+          evidence: `Auto-detected via Browser WASM OCR: ${entity.reason}`,
+          priority: (entity as any).priority || 95,
+        });
+      }
+      globalIndex++;
+    }
+
+    return selections;
+  } catch (err) {
+    console.warn('[Browser OCR Fallback Execution]:', err);
+    return [];
+  }
+}
+
+/**
+ * Hybrid Client-Side Auto-Detect Trigger.
  * 1. Instant client-side SVG fast path (<5ms)
- * 2. High-speed serverless OCR API with strict 12s timeout
+ * 2. High-speed serverless OCR API with 25s timeout
+ * 3. Resilient In-Browser WASM OCR fallback if server route is unavailable/restricted
  */
 export async function autoDetectImageSensitiveRegions(
   imageDataUrl: string,
@@ -98,7 +185,7 @@ export async function autoDetectImageSensitiveRegions(
         svgText = decodeURIComponent(payloadUrl.split('data:image/svg+xml,')[1] || payloadUrl.split('data:image/svg+xml;charset=utf-8,')[1] || payloadUrl);
       }
 
-      const { regions, allWords } = parseSvgToRegions(svgText);
+      const { regions } = parseSvgToRegions(svgText);
       const fullText = regions.map((r) => r.text).join('\n');
       const pipelineEntities = await runMultiLayerDetectionPipeline(fullText);
 
@@ -123,11 +210,11 @@ export async function autoDetectImageSensitiveRegions(
 
       if (selections.length > 0) return selections;
     } catch (e) {
-      console.warn('Client SVG fast-path fallback to server:', e);
+      console.warn('Client SVG fast-path fallback:', e);
     }
   }
 
-  // 2. Serverless OCR Scanning with 12s Timeout Protection
+  // 2. Serverless OCR Scanning with 25s Timeout Protection
   const { scanUrl, scaleFactor } = await optimizeImageForScan(payloadUrl, 1400);
 
   const controller = new AbortController();
@@ -135,7 +222,7 @@ export async function autoDetectImageSensitiveRegions(
   const timeoutId = setTimeout(() => {
     isTimedOut = true;
     controller.abort();
-  }, 12000);
+  }, 25000);
 
   try {
     const res = await fetch('/api/v1/mask/image/auto-detect', {
@@ -171,11 +258,22 @@ export async function autoDetectImageSensitiveRegions(
     return [];
   } catch (e: any) {
     clearTimeout(timeoutId);
-    if (e?.name === 'AbortError' || isTimedOut) {
-      throw new Error('Image scan timed out after 12s. Please drag boxes over sensitive text manually or crop the image.');
+    console.warn('Server OCR failed or timed out, executing in-browser fallback...', e);
+
+    // 3. Resilient In-Browser WASM OCR Fallback
+    try {
+      const fallbackSelections = await runBrowserOcrFallback(payloadUrl, sampleTextFallback);
+      if (fallbackSelections.length > 0) {
+        return fallbackSelections;
+      }
+    } catch (browserErr) {
+      console.error('Browser OCR fallback failed:', browserErr);
     }
-    console.error('Browser auto-detect error:', e);
-    throw new Error(e?.message || 'Failed to auto-detect sensitive regions from server');
+
+    if (e?.name === 'AbortError' || isTimedOut) {
+      throw new Error('Image scan timed out. You can also drag boxes over sensitive areas manually.');
+    }
+    throw new Error(e?.message || 'Failed to auto-detect sensitive regions.');
   }
 }
 

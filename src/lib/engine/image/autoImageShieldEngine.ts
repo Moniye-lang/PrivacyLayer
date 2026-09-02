@@ -1,6 +1,7 @@
 import { createWorker } from 'tesseract.js';
 import path from 'path';
 import fs from 'fs';
+import os from 'os';
 import { ImageRect, ImageSelection, DetectedEntity } from '../../../types';
 import { runMultiLayerDetectionPipeline } from '../multiLayerPipeline';
 
@@ -455,7 +456,7 @@ function parseTesseractPageData(
  * Calculates the exact pixel bounding box (x, y, width, height) for a detected sensitive entity.
  * Searches strictly on a per-line basis, locking to the exact line where the sensitive value resides.
  */
-function findPreciseEntityBoundingBoxes(
+export function findPreciseEntityBoundingBoxes(
   entity: DetectedEntity,
   regions: ExtractedTextRegion[],
   allWords: ExtractedWord[],
@@ -775,10 +776,33 @@ async function getOrInitOcrWorker(): Promise<any> {
           workerPath = potentialPath;
         }
       }
+
+      // Check if traineddata exists locally in root or public folder
+      let langPath: string | undefined = undefined;
+      if (root) {
+        const localTrainedData = path.join(root, 'eng.traineddata');
+        const publicTrainedData = path.join(root, 'public', 'eng.traineddata');
+        if (fs.existsSync(localTrainedData)) {
+          langPath = root;
+        } else if (fs.existsSync(publicTrainedData)) {
+          langPath = path.join(root, 'public');
+        }
+      }
+
+      // Ensure cache directory is writable (use os.tmpdir in production/serverless)
+      const tmpCacheDir = path.join(os.tmpdir(), 'tesseract-cache');
+      try {
+        if (!fs.existsSync(tmpCacheDir)) {
+          fs.mkdirSync(tmpCacheDir, { recursive: true });
+        }
+      } catch {
+        // Fallback gracefully if temp dir creation fails
+      }
+
       const worker = await createWorker('eng', 1, {
         workerPath,
-        cachePath: root || undefined,
-        langPath: root || undefined,
+        cachePath: tmpCacheDir,
+        langPath,
         gzip: false,
       });
       cachedOcrWorker = worker;
