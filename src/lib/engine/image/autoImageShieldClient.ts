@@ -178,12 +178,20 @@ async function runBrowserOcrFallback(
         const lineWords = line.words || [];
 
         if (lineWords.length > 0) {
+          const realLineText = line.text || '';
+          const lineOffsetInFull = fullOcrText.length;
+          let searchPos = 0;
+
           for (let wIdx = 0; wIdx < lineWords.length; wIdx++) {
             const word = lineWords[wIdx];
             const wordText = word.text;
-            const charStart = fullOcrText.length;
-            fullOcrText += wordText;
-            const charEnd = fullOcrText.length;
+            let foundIdx = realLineText.indexOf(wordText, searchPos);
+            if (foundIdx === -1) {
+              foundIdx = searchPos;
+            }
+            const charStart = lineOffsetInFull + foundIdx;
+            const charEnd = charStart + wordText.length;
+            searchPos = foundIdx + wordText.length;
 
             wordSpans.push({
               text: wordText,
@@ -191,11 +199,8 @@ async function runBrowserOcrFallback(
               charEnd,
               rect: word.rect,
             });
-
-            if (wIdx < lineWords.length - 1) {
-              fullOcrText += ' ';
-            }
           }
+          fullOcrText += (realLineText.length > 0 ? realLineText : lineWords.map(w => w.text).join(' '));
         } else if (line.text) {
           const charStart = fullOcrText.length;
           fullOcrText += line.text;
