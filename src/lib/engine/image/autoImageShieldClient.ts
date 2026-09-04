@@ -27,7 +27,7 @@ async function blobUrlToDataUrl(blobUrl: string): Promise<string> {
  */
 async function optimizeImageForScan(
   dataUrl: string,
-  maxDimension = 1400
+  maxDimension = 1200
 ): Promise<{ scanUrl: string; scaleFactor: number }> {
   if (typeof window === 'undefined' || typeof document === 'undefined') {
     return { scanUrl: dataUrl, scaleFactor: 1.0 };
@@ -61,8 +61,10 @@ async function optimizeImageForScan(
         return resolve({ scanUrl: dataUrl, scaleFactor: 1.0 });
       }
 
+      ctx.imageSmoothingEnabled = true;
+      ctx.imageSmoothingQuality = 'high';
       ctx.drawImage(img, 0, 0, scanW, scanH);
-      const scanUrl = canvas.toDataURL('image/jpeg', 0.90);
+      const scanUrl = canvas.toDataURL('image/jpeg', 0.88);
       resolve({ scanUrl, scaleFactor });
     };
     img.onerror = () => resolve({ scanUrl: dataUrl, scaleFactor: 1.0 });
@@ -403,15 +405,15 @@ export async function autoDetectImageSensitiveRegions(
     }
   }
 
-  // 2. Serverless OCR Scanning with 30s Timeout Protection
-  const { scanUrl, scaleFactor } = await optimizeImageForScan(payloadUrl, 1400);
+  // 2. Serverless OCR Scanning with 7.5s Fast Timeout Protection
+  const { scanUrl, scaleFactor } = await optimizeImageForScan(payloadUrl, 950);
 
   const controller = new AbortController();
   let isTimedOut = false;
   const timeoutId = setTimeout(() => {
     isTimedOut = true;
     controller.abort();
-  }, 30000);
+  }, 7500);
 
   try {
     const res = await fetch('/api/v1/mask/image/auto-detect', {

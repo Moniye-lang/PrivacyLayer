@@ -24,9 +24,6 @@ export async function POST(request: NextRequest) {
       ttlMinutes: typeof ttlMinutes === 'number' ? ttlMinutes : 60,
     });
 
-    console.log(`[Shield API] Shield SUCCESS: sessionId="${result.sessionId}", entities=${result.entitiesCount}, score ${result.initialPrivacyScore}→${result.shieldedPrivacyScore}`);
-    console.log(`[Shield API] Store diagnostics after save:`, privacyStore.diagnostics());
-
     return NextResponse.json(result, {
       status: 200,
       headers: getSecurityHeaders(),

@@ -903,9 +903,9 @@ export async function autoDetectImageSensitiveRegionsServer(
     const realHeight = preprocessing.originalHeight;
 
     let ret: any;
-    const runOcrWithTimeout = async (timeoutMs = 35000) => {
+    const runOcrWithTimeout = async (timeoutMs = 15000) => {
       const worker = await getOrInitOcrWorker();
-      const ocrTask = worker.recognize(preprocessing.processedBuffer, {}, { blocks: true, hocr: true, tsv: true });
+      const ocrTask = worker.recognize(preprocessing.processedBuffer, {}, { blocks: true });
       const timeoutTask = new Promise((_, reject) =>
         setTimeout(() => reject(new Error('Serverless OCR processing timed out.')), timeoutMs)
       );

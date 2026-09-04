@@ -402,11 +402,6 @@ export interface LineWrapNormalizerResult {
 }
 
 export function normalizeWrappedSecretLines(originalText: string): LineWrapNormalizerResult {
-  console.log('=== [NORMALIZE WRAPPED SECRET LINES CALLED] ===', {
-    textLength: originalText ? originalText.length : 0,
-    hasNewlines: originalText ? originalText.includes('\n') : false,
-  });
-
   if (!originalText || !originalText.includes('\n')) {
     return {
       normalizedText: originalText,
@@ -452,7 +447,6 @@ export function normalizeWrappedSecretLines(originalText: string): LineWrapNorma
   }
 
   if (wrappedIndices.size === 0) {
-    console.log('=== [NORMALIZE WRAPPED SECRET LINES: NO JOINING HAPPENED] ===');
     return {
       normalizedText: originalText,
       mapToOriginalOffset: (offset: number) => offset,
@@ -485,11 +479,6 @@ export function normalizeWrappedSecretLines(originalText: string): LineWrapNorma
   }
 
   joinedToOriginalMap.push(originalText.length);
-
-  console.log('=== [NORMALIZE WRAPPED SECRET LINES: RESULTING NORMALIZED TEXT] ===', {
-    joinedCount: wrappedIndices.size,
-    normalizedText,
-  });
 
   return {
     normalizedText,
