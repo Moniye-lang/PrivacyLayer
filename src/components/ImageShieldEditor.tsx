@@ -37,6 +37,7 @@ const COMMON_ENTITY_TYPES: { type: EntityType; label: string; color: string }[] 
   { type: 'COMPANY_SECRET', label: 'SECRET', color: 'bg-pink-500/20 text-pink-300 border-pink-500/40' },
   { type: 'ORGANIZATION', label: 'COMPANY', color: 'bg-teal-500/20 text-teal-300 border-teal-500/40' },
   { type: 'PROJECT_CODENAME', label: 'PROJECT', color: 'bg-cyan-500/20 text-cyan-300 border-cyan-500/40' },
+  { type: 'DATE', label: 'DATE', color: 'bg-amber-500/20 text-amber-300 border-amber-500/40' },
   { type: 'CUSTOM_TERM', label: 'CUSTOM', color: 'bg-slate-700 text-slate-200 border-slate-600' },
 ];
 

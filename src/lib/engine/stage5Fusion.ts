@@ -138,6 +138,7 @@ function getCategoryForType(type: EntityType) {
     case 'EMAIL_ADDRESS':
     case 'PHONE_NUMBER':
     case 'ADDRESS':
+    case 'DATE':
     case 'LOCATION':
       return 'PII';
     default:
@@ -157,6 +158,7 @@ function getPlaceholderForType(type: EntityType): string {
     case 'REPOSITORY': return '[[REPOSITORY_001]]';
     case 'EMAIL_ADDRESS': return '[[EMAIL_001]]';
     case 'PHONE_NUMBER': return '[[PHONE_001]]';
+    case 'DATE': return '[[DATE_001]]';
     case 'CONNECTION_STRING': return '[[CONNECTION_STRING_001]]';
     case 'CREDIT_CARD': return '[[CREDIT_CARD_001]]';
     case 'IBAN': return '[[IBAN_001]]';

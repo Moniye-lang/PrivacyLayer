@@ -23,7 +23,7 @@ function getCategoryForType(type: string): EntityCategory {
   if (['CONNECTION_STRING', 'API_KEY', 'JWT_TOKEN', 'PASSWORD', 'SOURCE_CODE_SECRET', 'COMPANY_SECRET'].includes(type)) {
     return 'SECRET';
   }
-  if (['EMAIL_ADDRESS', 'PHONE_NUMBER', 'PERSON_NAME', 'SSN_NATIONAL_ID', 'PASSPORT_NUMBER', 'ADDRESS'].includes(type)) {
+  if (['EMAIL_ADDRESS', 'PHONE_NUMBER', 'PERSON_NAME', 'SSN_NATIONAL_ID', 'PASSPORT_NUMBER', 'ADDRESS', 'DATE'].includes(type)) {
     return 'PII';
   }
   if (['CREDIT_CARD', 'BANK_ACCOUNT', 'IBAN', 'FINANCIAL_METRIC'].includes(type)) {

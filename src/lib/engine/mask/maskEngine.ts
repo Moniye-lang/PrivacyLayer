@@ -111,6 +111,7 @@ export class MaskEngine {
       MEDICAL_RECORD: 50,
       LEGAL_REFERENCE: 50,
       FINANCIAL_METRIC: 50,
+      DATE: 35,
     };
 
     // Document-Wide Sensitive Value Self-Propagation Pass
@@ -131,6 +132,8 @@ export class MaskEngine {
         span.entityType === 'CONNECTION_STRING' ||
         span.entityType === 'EMAIL_ADDRESS' ||
         span.entityType === 'PHONE_NUMBER' ||
+        span.entityType === 'PROJECT_CODENAME' ||
+        span.entityType === 'COMPANY_SECRET' ||
         (span.entityType === 'PERSON_NAME' && val.includes(' '));
 
       if (shouldPropagate) {
@@ -139,14 +142,19 @@ export class MaskEngine {
           const sEnd = searchIndex + val.length;
           const isCovered = coveredRanges.some((r) => Math.max(r.start, searchIndex) < Math.min(r.end, sEnd));
           if (!isCovered) {
-            allSpans.push({
-              ...span,
-              start: searchIndex,
-              end: sEnd,
-              text: val,
-              evidence: `${span.evidence} (Document-wide value propagation)`,
-            });
-            coveredRanges.push({ start: searchIndex, end: sEnd });
+            const charBefore = searchIndex > 0 ? originalText[searchIndex - 1] : ' ';
+            const charAfter = sEnd < originalText.length ? originalText[sEnd] : ' ';
+            const isWordBoundary = !/[a-zA-Z0-9_]/.test(charBefore) && !/[a-zA-Z0-9_]/.test(charAfter);
+            if (isWordBoundary) {
+              allSpans.push({
+                ...span,
+                start: searchIndex,
+                end: sEnd,
+                text: val,
+                evidence: `${span.evidence} (Document-wide value propagation)`,
+              });
+              coveredRanges.push({ start: searchIndex, end: sEnd });
+            }
           }
           searchIndex += val.length;
         }

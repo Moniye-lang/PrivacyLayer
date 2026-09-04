@@ -51,10 +51,22 @@ const REGEX_PATTERNS: RegexPatternSpec[] = [
     confidence: 0.9,
   },
   {
+    type: 'DATE',
+    regex: /\b(?:19|20)\d{2}[-/.]\d{1,2}[-/.]\d{1,2}\b|\b\d{1,2}[-/.]\d{1,2}[-/.]\d{2,4}\b|\b(?:Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:tember)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)\s+\d{1,2}(?:st|nd|rd|th)?(?:,?\s+(?:19|20)?\d{2})?\b|\b\d{1,2}(?:st|nd|rd|th)?\s+(?:Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:tember)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)(?:\s+(?:19|20)?\d{2})?\b|\b(?:19|20)\d{2}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:?\d{2})?\b/gi,
+    reason: 'Calendar date or timestamp format',
+    confidence: 0.92,
+  },
+  {
+    type: 'FINANCIAL_METRIC',
+    regex: /(?:[+-][\$€£¥₦]\s*\d{1,3}(?:,\d{3})*(?:\.\d{1,2})?(?:\s*(?:[kKmMbBtT]|million|billion|thousand))?|\b[+-]\d+(?:\.\d+)?%\b|\b\d+(?:\.\d+)?%\s*(?:margin|velocity|growth|yield|discount|gain|loss|return|rate)\b|\b\d+(?:\.\d+)?\s*(?:bps|Sharpe|ROI|PnL|EBITDA|ARR|MRR)\b)/gi,
+    reason: 'Financial metric or performance KPI format',
+    confidence: 0.9,
+  },
+  {
     type: 'PHONE_NUMBER',
-    regex: /(?:\+\d{1,4}[-.\s]*)?(?:\(\d{1,4}\)[-.\s]*)?(?:[0-9]{2,4}[-.\s]?[0-9]{2,4}[-.\s]?[0-9]{2,4}(?:[-.\s]?[0-9]{2,5})?)\b/g,
-    reason: 'Standard phone number pattern',
-    confidence: 0.85,
+    regex: /(?:\+\d{1,4}[-.\s]*)?(?:\(\d{1,4}\)[-.\s]*)?(?:[0-9]{2,4}[-.\s]?[0-9]{2,4}[-.\s]?[0-9]{2,4}(?:[-.\s]?[0-9]{2,5})?)\b|\+\d{1,4}(?:\([0-9]\))?[0-9]{8,12}\b|\b0[789]\d{8,9}\b/g,
+    reason: 'Standard telephone number pattern',
+    confidence: 0.88,
   },
   {
     type: 'ADDRESS',
@@ -81,12 +93,44 @@ export class RegexDetector implements Detector {
         const matchedText = match[0];
         const trimmed = matchedText.trim();
 
-        // Guard: Phone numbers should never match IPv4 addresses (4 groups of 1-3 digits separated strictly by dots)
+        // Guard against false positive PHONE_NUMBER classifications:
         if (spec.type === 'PHONE_NUMBER') {
+          // 1. Never match IPv4 addresses
           if (/^(?:[0-9]{1,3}\.){3}[0-9]{1,3}$/.test(trimmed)) {
             continue;
           }
           if (!trimmed.includes('+') && (trimmed.match(/\./g) || []).length >= 3) {
+            continue;
+          }
+
+          // 2. Never match standard Dates (e.g. 2024-05-12, 12/05/2024, 04-09-2026, 2026.09.04)
+          if (/^(?:19|20)\d{2}[-/.]\d{1,2}[-/.]\d{1,2}$/.test(trimmed) || /^\d{1,2}[-/.]\d{1,2}[-/.]\d{2,4}$/.test(trimmed)) {
+            continue;
+          }
+
+          // 3. Never match Times of day (e.g. 14:30, 14:30:00, 17:40–18:20, 05:03 PM)
+          if (/\b\d{1,2}:\d{2}(?::\d{2})?(?:\s*(?:AM|PM))?\b/i.test(trimmed) || /\d{1,2}:\d{2}\s*[-–]\s*\d{1,2}:\d{2}/.test(trimmed)) {
+            continue;
+          }
+
+          // 4. Never match version numbers (e.g. 1.0.0, 14.2.15)
+          if (/^v?\d+\.\d+(?:\.\d+)*$/.test(trimmed)) {
+            continue;
+          }
+
+          // 5. Total digit count for phone numbers must be between 7 and 15
+          const digitCount = (trimmed.match(/\d/g) || []).length;
+          if (digitCount < 7 || digitCount > 15) {
+            continue;
+          }
+
+          // 6. Standalone 4-digit years (e.g. 1999, 2024, 2025, 2026)
+          if (/^(?:19|20)\d{2}$/.test(trimmed)) {
+            continue;
+          }
+
+          // 7. Standalone basic numbers, counters, or percentages (under 7 digits)
+          if (/^[\$€£₦]?\d{1,6}(?:\.\d+)?%?$/.test(trimmed)) {
             continue;
           }
         }
@@ -112,3 +156,4 @@ export class RegexDetector implements Detector {
     return candidates;
   }
 }
+

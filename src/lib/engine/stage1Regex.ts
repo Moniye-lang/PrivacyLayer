@@ -34,6 +34,19 @@ function validateLuhn(cardNumber: string): boolean {
   return sum % 10 === 0;
 }
 
+// Phone Number Validator to prevent Dates, Times, IP Addresses, and basic numbers from being misidentified
+function validatePhoneNumber(phone: string): boolean {
+  const trimmed = phone.trim();
+  if (/^(?:[0-9]{1,3}\.){3}[0-9]{1,3}$/.test(trimmed)) return false;
+  if (/^(?:19|20)\d{2}[-/.]\d{1,2}[-/.]\d{1,2}$/.test(trimmed) || /^\d{1,2}[-/.]\d{1,2}[-/.]\d{2,4}$/.test(trimmed)) return false;
+  if (/\b\d{1,2}:\d{2}(?::\d{2})?(?:\s*(?:AM|PM))?\b/i.test(trimmed) || /\d{1,2}:\d{2}\s*[-–]\s*\d{1,2}:\d{2}/.test(trimmed)) return false;
+  if (/^v?\d+\.\d+(?:\.\d+)*$/.test(trimmed)) return false;
+  if (/^(?:19|20)\d{2}$/.test(trimmed)) return false;
+  if (/^[\$€£₦]?\d{1,6}(?:\.\d+)?%?$/.test(trimmed)) return false;
+  const digits = (trimmed.match(/\d/g) || []).length;
+  return digits >= 7 && digits <= 15;
+}
+
 const STAGE1_RULES: RegexPatternRule[] = [
   // 1. Email Address
   {
@@ -43,39 +56,7 @@ const STAGE1_RULES: RegexPatternRule[] = [
     reason: 'Personal Information Detector: Email Address detected',
     confidence: 0.99,
   },
-  // 2. Phone Numbers (International & Standard Formats)
-  {
-    type: 'PHONE_NUMBER',
-    category: 'PII',
-    pattern: /(?<!\w)(?:\+\d{1,4}[-.\s]*)?(?:\(\d{1,4}\)[-.\s]*)?(?:[0-9]{3,4}[-.\s]?[0-9]{3,4}[-.\s]?[0-9]{3,5})\b/g,
-    reason: 'Personal Information Detector: Phone Number detected',
-    confidence: 0.92,
-  },
-  // 3. Street Addresses
-  {
-    type: 'ADDRESS',
-    category: 'PII',
-    pattern: /\b\d{1,5}\s+[A-Z0-9\.\s,-]{2,30}\s+(?:Street|St|Avenue|Ave|Boulevard|Blvd|Road|Rd|Lane|Ln|Drive|Dr|Way|Court|Ct|Circle|Cir|Apartment|Apt|Suite|Ste|Floor|Fl)\b/gi,
-    reason: 'Personal Information Detector: Physical Street Address detected',
-    confidence: 0.94,
-  },
-  // 4. Postal / ZIP Codes (US, UK, CA, EU)
-  {
-    type: 'ADDRESS',
-    category: 'PII',
-    pattern: /\b(?:ZIP|Postal Code|Postal)\s*[:=]?\s*([A-Z0-9]{3,5}[-\s]?[A-Z0-9]{3,4}|\d{5}(?:-\d{4})?)\b/gi,
-    reason: 'Personal Information Detector: Postal / ZIP Code detected',
-    confidence: 0.93,
-  },
-  // 5. Bank Accounts
-  {
-    type: 'BANK_ACCOUNT',
-    category: 'FINANCIAL',
-    pattern: /\b(?:Account|Acct|Account Number|Acc #)\s*[:=]?\s*#?(\d{8,17})\b/gi,
-    reason: 'Financial Detector: Bank Account Number detected',
-    confidence: 0.96,
-  },
-  // 6. IBAN (International Bank Account Number)
+  // 2. IBAN (International Bank Account Number)
   {
     type: 'IBAN',
     category: 'FINANCIAL',
@@ -84,15 +65,7 @@ const STAGE1_RULES: RegexPatternRule[] = [
     confidence: 0.98,
     validator: validateIBAN,
   },
-  // 7. ABA Routing Numbers (9-digit)
-  {
-    type: 'BANK_ACCOUNT',
-    category: 'FINANCIAL',
-    pattern: /\b(?:Routing|ABA|Routing Number)\s*[:=]?\s*#?(\d{9})\b/gi,
-    reason: 'Financial Detector: ABA Routing Number detected',
-    confidence: 0.95,
-  },
-  // 8. Credit Card Numbers (Luhn-validated)
+  // 3. Credit Card Numbers (Luhn-validated)
   {
     type: 'CREDIT_CARD',
     category: 'FINANCIAL',
@@ -101,7 +74,7 @@ const STAGE1_RULES: RegexPatternRule[] = [
     confidence: 0.98,
     validator: validateLuhn,
   },
-  // 9. Crypto Wallet Addresses (BTC, ETH, SOL)
+  // 4. Crypto Wallet Addresses (BTC, ETH, SOL)
   {
     type: 'BANK_ACCOUNT',
     category: 'FINANCIAL',
@@ -109,7 +82,7 @@ const STAGE1_RULES: RegexPatternRule[] = [
     reason: 'Financial Detector: Crypto Wallet Address detected',
     confidence: 0.97,
   },
-  // 10. SSN / National ID
+  // 5. SSN / National ID
   {
     type: 'SSN_NATIONAL_ID',
     category: 'IDENTIFIER',
@@ -117,7 +90,7 @@ const STAGE1_RULES: RegexPatternRule[] = [
     reason: 'Personal Information Detector: SSN / National ID detected',
     confidence: 0.96,
   },
-  // 11. Passport Numbers
+  // 6. Passport Numbers
   {
     type: 'PASSPORT_NUMBER',
     category: 'IDENTIFIER',
@@ -125,7 +98,71 @@ const STAGE1_RULES: RegexPatternRule[] = [
     reason: 'Personal Information Detector: Passport Number detected',
     confidence: 0.90,
   },
-  // 12. Source Code Environment Variables
+  // 7. UUID
+  {
+    type: 'UUID',
+    category: 'IDENTIFIER',
+    pattern: /\b[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}\b/gi,
+    reason: 'Regex Detector: UUID / GUID detected',
+    confidence: 0.99,
+  },
+  // 8. Bank Accounts & Routing
+  {
+    type: 'BANK_ACCOUNT',
+    category: 'FINANCIAL',
+    pattern: /\b(?:Account|Acct|Account Number|Acc #)\s*[:=]?\s*#?(\d{8,17})\b/gi,
+    reason: 'Financial Detector: Bank Account Number detected',
+    confidence: 0.96,
+  },
+  {
+    type: 'BANK_ACCOUNT',
+    category: 'FINANCIAL',
+    pattern: /\b(?:Routing|ABA|Routing Number)\s*[:=]?\s*#?(\d{9})\b/gi,
+    reason: 'Financial Detector: ABA Routing Number detected',
+    confidence: 0.95,
+  },
+  // 9. Calendar Dates and Timestamps
+  {
+    type: 'DATE',
+    category: 'PII',
+    pattern: /\b(?:19|20)\d{2}[-/.]\d{1,2}[-/.]\d{1,2}\b|\b\d{1,2}[-/.]\d{1,2}[-/.]\d{2,4}\b|\b(?:Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:tember)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)\s+\d{1,2}(?:st|nd|rd|th)?(?:,?\s+(?:19|20)?\d{2})?\b|\b\d{1,2}(?:st|nd|rd|th)?\s+(?:Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:tember)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)(?:\s+(?:19|20)?\d{2})?\b|\b(?:19|20)\d{2}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:?\d{2})?\b/gi,
+    reason: 'Calendar Date or Timestamp detected',
+    confidence: 0.93,
+  },
+  // 10. Financial Metrics & Performance KPIs
+  {
+    type: 'FINANCIAL_METRIC',
+    category: 'FINANCIAL',
+    pattern: /(?:[+-][\$€£¥₦]\s*\d{1,3}(?:,\d{3})*(?:\.\d{1,2})?(?:\s*(?:[kKmMbBtT]|million|billion|thousand))?|\b[+-]\d+(?:\.\d+)?%\b|\b\d+(?:\.\d+)?%\s*(?:margin|velocity|growth|yield|discount|gain|loss|return|rate)\b|\b\d+(?:\.\d+)?\s*(?:bps|Sharpe|ROI|PnL|EBITDA|ARR|MRR)\b)/gi,
+    reason: 'Financial Metric or Performance KPI detected',
+    confidence: 0.92,
+  },
+  // 11. Phone Numbers (International & Standard Formats)
+  {
+    type: 'PHONE_NUMBER',
+    category: 'PII',
+    pattern: /(?<![a-zA-Z0-9])(?:\+\d{1,4}[-.\s]*)?(?:\(\d{1,4}\)[-.\s]*)?(?:[0-9]{2,4}[-.\s]?[0-9]{2,4}[-.\s]?[0-9]{2,4}(?:[-.\s]?[0-9]{2,5})?)\b|\+\d{1,4}(?:\([0-9]\))?[0-9]{8,12}\b|\b0[789]\d{8,9}\b/g,
+    reason: 'Personal Information Detector: Phone Number detected',
+    confidence: 0.92,
+    validator: validatePhoneNumber,
+  },
+  // 12. Street Addresses
+  {
+    type: 'ADDRESS',
+    category: 'PII',
+    pattern: /\b\d{1,5}\s+[A-Z0-9\.\s,-]{2,30}\s+(?:Street|St|Avenue|Ave|Boulevard|Blvd|Road|Rd|Lane|Ln|Drive|Dr|Way|Court|Ct|Circle|Cir|Apartment|Apt|Suite|Ste|Floor|Fl)\b/gi,
+    reason: 'Personal Information Detector: Physical Street Address detected',
+    confidence: 0.94,
+  },
+  // 13. Postal / ZIP Codes (US, UK, CA, EU)
+  {
+    type: 'ADDRESS',
+    category: 'PII',
+    pattern: /\b(?:ZIP|Postal Code|Postal)\s*[:=]?\s*([A-Z0-9]{3,5}[-\s]?[A-Z0-9]{3,4}|\d{5}(?:-\d{4})?)\b/gi,
+    reason: 'Personal Information Detector: Postal / ZIP Code detected',
+    confidence: 0.93,
+  },
+  // 14. Source Code Environment Variables
   {
     type: 'SOURCE_CODE_SECRET',
     category: 'SECRET',
@@ -133,7 +170,7 @@ const STAGE1_RULES: RegexPatternRule[] = [
     reason: 'Source Code Detector: Environment Variable reference detected',
     confidence: 0.95,
   },
-  // 13. Source Code Config File & Hardcoded Secrets
+  // 15. Source Code Config File & Hardcoded Secrets
   {
     type: 'SOURCE_CODE_SECRET',
     category: 'SECRET',
@@ -141,21 +178,13 @@ const STAGE1_RULES: RegexPatternRule[] = [
     reason: 'Source Code Detector: Hardcoded Credential assignment in source code detected',
     confidence: 0.96,
   },
-  // 14. Passwords in config/prompts/assignments
+  // 16. Passwords in config/prompts/assignments
   {
     type: 'PASSWORD',
     category: 'SECRET',
     pattern: /\b(?:password|passwd|pwd|passcode|passphrase|secret_key|db_password|db_pass|admin_password|root_password)\s*(?:[:=]|=>|->)\s*["']?([^\s"';,]{3,128})["']?/gi,
     reason: 'Password or Auth Secret pattern detected',
     confidence: 0.96,
-  },
-  // 15. UUID
-  {
-    type: 'UUID',
-    category: 'IDENTIFIER',
-    pattern: /\b[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}\b/gi,
-    reason: 'Regex Detector: UUID / GUID detected',
-    confidence: 0.99,
   },
 ];
 

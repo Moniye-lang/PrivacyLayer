@@ -1036,4 +1036,112 @@ TEAM ROSTER:
     const revealed = await revealResponse({ sessionId: result.sessionId, aiResponse: result.protectedPrompt });
     expect(revealed.restoredResponse).toBe(prompt);
   });
+
+  test('Number & Date Disambiguation: Distinguishes Dates, Financials, and Times from Phone Numbers', async () => {
+    // 1. Dates should be labeled as DATE, never PHONE_NUMBER
+    const dateInput = 'Release on 2024-05-12 and review on 12/05/2024 or September 4, 2026.';
+    const dateResult = await shieldPrompt({ prompt: dateInput });
+    expect(dateResult.protectedPrompt).toContain('[[DATE_001]]');
+    expect(dateResult.protectedPrompt).toContain('[[DATE_002]]');
+    expect(dateResult.protectedPrompt).toContain('[[DATE_003]]');
+    expect(dateResult.protectedPrompt).not.toContain('PHONE');
+
+    // 2. Financial metrics should be labeled as FINANCIAL_METRIC, never PHONE_NUMBER
+    const finInput = 'Closed +$48,500 with 95% velocity and +34% margin.';
+    const finResult = await shieldPrompt({ prompt: finInput });
+    expect(finResult.protectedPrompt).toContain('[[FINANCIAL_METRIC_001]]');
+    expect(finResult.protectedPrompt).not.toContain('PHONE');
+
+    // 3. Genuine phone numbers should be correctly labeled as PHONE_NUMBER
+    const phoneInput = 'Call direct at +1 (800) 555-0199 or mobile 08012345678.';
+    const phoneResult = await shieldPrompt({ prompt: phoneInput });
+    expect(phoneResult.protectedPrompt).toContain('[[PHONE_NUMBER_001]]');
+    expect(phoneResult.protectedPrompt).toContain('[[PHONE_NUMBER_002]]');
+
+    // 4. Lossless restoration
+    const restored = await revealResponse({ sessionId: phoneResult.sessionId, aiResponse: phoneResult.protectedPrompt });
+    expect(restored.restoredResponse).toBe(phoneInput);
+  });
+
+  test('MEGA COMBO TEST: Precision shielding across payload, code, URLs, prose passwords, and tables', async () => {
+    const mockStripeKey = 'sk' + '_live_5rT8yUvW1xZ3aB5cD7eF9gH1iJ3kL5mN';
+    const mockGhToken = 'gh' + 'p_p8Q1rS3tU5vW7xY9zA1bC3dE5fG7hI9j';
+    const megaInput = `MEGA COMBO TEST
+
+--- JSON PAYLOAD ---
+{
+  "user": "Wei Zhang",
+  "email": "wei.zhang@globex.co",
+  "api_key": "${mockStripeKey}",
+  "role": "admin"
+}
+
+--- MARKDOWN TABLE ---
+| Name | Contact | Project |
+|-------------------|-----------------------------|-----------------|
+| Wei Zhang | wei.zhang@globex.co | Orion |
+| Priya Sharma | priya.sharma@globex.co | Orion |
+
+--- CODE BLOCK ---
+\`\`\`
+const dbUrl = "mysql://root:Gl0bex!2026@db.globex.internal:3306/orion";
+const token = "${mockGhToken}";
+\`\`\`
+
+--- EMBEDDED CREDENTIALS IN URL ---
+Full dashboard link: https://admin:Sup3rSecret@dashboard.globex.co/orion/admin
+
+--- PROSE WITH SARCASM ---
+Oh great, ANOTHER password to remember. Priya Sharma set the new one to Dr@gon$laye3025, because apparently that's easier than using a manager. Wei Zhang agreed it's "fine for now" (it is not fine).
+
+--- MIXED CURRENCY, NOT SECRETS ---
+Budget for Project Orion this quarter: $12,000 USD / ₦18,500,000 / £9,400.
+None of these numbers are sensitive, please don't mask them.
+
+--- CONTACT BLOCK ---
+Wei Zhang: +86 138 0013 8000
+Priya Sharma: +91 98765 43210
+Support: support@globex.co
+
+--- FALSE POSITIVE BAIT ---
+This section is just documentation about tokens, keys, and passwords in general - the word "secret" here refers to the concept, not a real value.`;
+
+    const result = await shieldPrompt({ prompt: megaInput });
+    console.log('=== MEGA COMBO SHIELDED RESULT ===\n' + result.protectedPrompt);
+
+    // Assertions
+    // 1. Full API key masked completely (no prefix/suffix leaks)
+    expect(result.protectedPrompt).not.toContain('sk' + '_live_5r');
+    expect(result.protectedPrompt).not.toContain('H1iJ3kL5mN');
+
+    // 2. Full MySQL URI masked completely (no prefix/suffix leaks)
+    expect(result.protectedPrompt).not.toContain('Gl0bex!2026');
+    expect(result.protectedPrompt).not.toContain('mysql://root');
+
+    // 3. Full GitHub token masked completely (no prefix/suffix leaks)
+    expect(result.protectedPrompt).not.toContain('gh' + 'p_p8Q1');
+    expect(result.protectedPrompt).not.toContain('5fG7hI9j');
+
+    // 4. Embedded URL credential masked completely
+    expect(result.protectedPrompt).not.toContain('Sup3rSecret');
+    expect(result.protectedPrompt).not.toContain('https://admin:');
+
+    // 5. Natural password masked
+    expect(result.protectedPrompt).not.toContain('Dr@gon$laye3025');
+
+    // 6. Project Orion in table & prose masked
+    expect(result.protectedPrompt).not.toContain('Orion');
+
+    // 7. Currency amounts untouched
+    expect(result.protectedPrompt).toContain('$12,000 USD');
+    expect(result.protectedPrompt).toContain('₦18,500,000');
+    expect(result.protectedPrompt).toContain('£9,400');
+
+    // 8. False positive words untouched
+    expect(result.protectedPrompt).toContain('the word "secret" here refers to the concept');
+
+    // 9. Lossless restoration
+    const revealed = await revealResponse({ sessionId: result.sessionId, aiResponse: result.protectedPrompt });
+    expect(revealed.restoredResponse).toBe(megaInput);
+  });
 });

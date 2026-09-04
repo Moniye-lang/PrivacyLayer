@@ -42,6 +42,7 @@ export const ENTITY_TYPE_ABBREVIATIONS: Record<string, string> = {
   LEGAL_REFERENCE: 'LEGAL_REFERENCE',
   PRODUCT: 'PRODUCT',
   EVENT: 'EVENT',
+  DATE: 'DATE',
 };
 
 /**

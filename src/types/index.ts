@@ -38,6 +38,7 @@ export type EntityType =
   | 'REPOSITORY'
   | 'SOURCE_CODE_SECRET'
   | 'ADDRESS'
+  | 'DATE'
   | 'CUSTOM_TERM';
 
 export enum PriorityLevel {
