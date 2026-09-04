@@ -208,6 +208,77 @@ export class ContextDetector implements Detector {
       }
     }
 
+    // Table Structure Detection: detect table columns like "| Project |" or "| Name |"
+    const tableLines = text.split(/\r?\n/);
+    let lineCharOffset = 0;
+
+    for (let i = 0; i < tableLines.length - 1; i++) {
+      const headerLine = tableLines[i];
+      const sepLine = tableLines[i + 1];
+
+      // Check if this line is a markdown table header followed by a delimiter (|---|---|)
+      if (headerLine.includes('|') && /^\s*\|?\s*[-:]+[-| :]*\|?\s*$/.test(sepLine)) {
+        const headerCells = headerLine.split('|').map(c => c.trim()).filter(c => c.length > 0);
+        const colTypes: (EntityType | null)[] = headerCells.map(h => {
+          const lower = h.toLowerCase();
+          if (/^(?:project|initiative|codename|campaign|product|app|application|feature)\b/i.test(lower)) {
+            return 'PROJECT_CODENAME';
+          }
+          if (/^(?:name|full\s+name|person|user|employee|author|lead|owner|candidate|contact\s+name)\b/i.test(lower)) {
+            return 'PERSON_NAME';
+          }
+          if (/^(?:repo|repository|codebase)\b/i.test(lower)) {
+            return 'REPOSITORY';
+          }
+          if (/^(?:secret|token|api\s*key|key|password)\b/i.test(lower)) {
+            return 'COMPANY_SECRET';
+          }
+          return null;
+        });
+
+        // Scan subsequent data rows in the table
+        let rowCharOffset = lineCharOffset + headerLine.length + 1 + sepLine.length + 1;
+        for (let r = i + 2; r < tableLines.length; r++) {
+          const rowLine = tableLines[r];
+          if (!rowLine.includes('|') || rowLine.trim().length === 0) {
+            break;
+          }
+          const rawCells = rowLine.split('|');
+          const cells = rawCells.filter((_, idx) => !(idx === 0 && rawCells[0].trim() === '') && !(idx === rawCells.length - 1 && rawCells[rawCells.length - 1].trim() === ''));
+
+          for (let c = 0; c < cells.length && c < colTypes.length; c++) {
+            const trimmedCell = cells[c].trim();
+            const targetType = colTypes[c];
+
+            if (targetType && trimmedCell.length >= 2 && !DISALLOWED_COMMON_WORDS.has(trimmedCell.toLowerCase())) {
+              const cellIdxInRow = rowLine.indexOf(trimmedCell);
+              if (cellIdxInRow !== -1) {
+                const cellValStart = rowCharOffset + cellIdxInRow;
+                const cellValEnd = cellValStart + trimmedCell.length;
+
+                candidates.push({
+                  id: `context_table_${targetType.toLowerCase()}_${cellValStart}_${cellValEnd}`,
+                  start: cellValStart,
+                  end: cellValEnd,
+                  entityType: targetType,
+                  confidence: 0.98,
+                  priority: this.priority + 10,
+                  detectorId: this.id,
+                  evidence: `Table Column Detector: Recognized "${trimmedCell}" in "${headerCells[c]}" column`,
+                  atomic: true,
+                  text: trimmedCell,
+                });
+              }
+            }
+          }
+
+          rowCharOffset += rowLine.length + 1;
+        }
+      }
+
+      lineCharOffset += headerLine.length + 1;
+    }
+
     for (const rule of CONTEXT_RULES) {
       rule.pattern.lastIndex = 0;
       let match: RegExpExecArray | null;

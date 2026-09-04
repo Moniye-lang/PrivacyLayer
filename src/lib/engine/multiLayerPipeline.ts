@@ -65,8 +65,55 @@ export async function runMultiLayerDetectionPipeline(
   // 2. Resolve overlapping spans strictly by Compatibility Matrix & Priority Authority
   const resolvedSpans = spanResolver.resolve(candidates, prompt);
 
-  // 3. Map resolved spans to DetectedEntity interface for backwards compatibility
-  return resolvedSpans.map((span) => ({
+  // 3. Document-wide value propagation for high-value entities (PROJECT_CODENAME, COMPANY_SECRET, PASSWORD, API_KEY, etc.)
+  const allSpans = [...resolvedSpans];
+  const coveredRanges = resolvedSpans.map((s) => ({ start: s.start, end: s.end }));
+
+  for (const span of resolvedSpans) {
+    const val = (span.text || prompt.substring(span.start, span.end)).trim();
+    if (!val || val.length < 3 || /^(?:the|and|for|with|that|this|from|have|been|will|were|they|some|more|test|here|your)$/i.test(val)) {
+      continue;
+    }
+    const shouldPropagate =
+      span.entityType === 'PASSWORD' ||
+      span.entityType === 'API_KEY' ||
+      span.entityType === 'JWT_TOKEN' ||
+      span.entityType === 'SOURCE_CODE_SECRET' ||
+      span.entityType === 'CONNECTION_STRING' ||
+      span.entityType === 'EMAIL_ADDRESS' ||
+      span.entityType === 'PHONE_NUMBER' ||
+      span.entityType === 'PROJECT_CODENAME' ||
+      span.entityType === 'COMPANY_SECRET' ||
+      (span.entityType === 'PERSON_NAME' && val.includes(' '));
+
+    if (shouldPropagate) {
+      let searchIndex = 0;
+      while ((searchIndex = prompt.indexOf(val, searchIndex)) !== -1) {
+        const sEnd = searchIndex + val.length;
+        const isCovered = coveredRanges.some((r) => Math.max(r.start, searchIndex) < Math.min(r.end, sEnd));
+        if (!isCovered) {
+          const charBefore = searchIndex > 0 ? prompt[searchIndex - 1] : ' ';
+          const charAfter = sEnd < prompt.length ? prompt[sEnd] : ' ';
+          const isWordBoundary = !/[a-zA-Z0-9_]/.test(charBefore) && !/[a-zA-Z0-9_]/.test(charAfter);
+          if (isWordBoundary) {
+            allSpans.push({
+              ...span,
+              id: `${span.id}_prop_${searchIndex}`,
+              start: searchIndex,
+              end: sEnd,
+              text: val,
+              evidence: `${span.evidence} (Document-wide value propagation)`,
+            });
+            coveredRanges.push({ start: searchIndex, end: sEnd });
+          }
+        }
+        searchIndex += val.length;
+      }
+    }
+  }
+
+  // 4. Map resolved spans to DetectedEntity interface for backwards compatibility
+  return allSpans.map((span) => ({
     id: span.id,
     type: span.entityType,
     category: getCategoryForType(span.entityType),
@@ -76,7 +123,7 @@ export async function runMultiLayerDetectionPipeline(
     confidence: span.confidence,
     reason: span.evidence,
     placeholder: `[[${span.entityType}_001]]`,
-    votes: span.contributingDetections.map((d) => ({
+    votes: span.contributingDetections?.map((d) => ({
       stage: d.detectorId.includes('secret')
         ? 'SECRET'
         : d.detectorId.includes('regex')
@@ -87,7 +134,7 @@ export async function runMultiLayerDetectionPipeline(
       type: d.entityType,
       confidence: d.confidence,
       reason: d.evidence,
-    })),
+    })) || [],
   }));
 }
 
