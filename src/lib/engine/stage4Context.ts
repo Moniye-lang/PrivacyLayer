@@ -21,13 +21,13 @@ const STAGE4_CONTEXT_RULES: ContextPrecursorRule[] = [
     confidence: 0.98,
     placeholderPrefix: 'PERSON',
   },
-  // 2. Self-Identification & Introductions: "my name is Jeff", "I am Alex", "call me Jeff", "Name: Jeff"
+  // 2. Self-Identification & Introductions: "my name is Jeff", "I am Alex", "call me Jeff", "Name: uuuebf"
   {
     type: 'PERSON_NAME',
     category: 'PII',
-    pattern: /\b(?:my\s+name\s+(?:is|'s)|i\s+am|i'm|call\s+me|myself|this\s+is|(?:full\s+)?name\s*[:=]|user(?:name)?\s*[:=]|signed\s+(?:by|off\s+by)?\s*[:=]?|regards,?\s*|sincerely,?\s*)\s+([a-zA-Z\u00C0-\u024F]{2,20}(?:\s+[a-zA-Z\u00C0-\u024F]{2,20})?)\b/gi,
+    pattern: /\b(?:my\s+name\s+(?:is|'s)|i\s+am|i'm|call\s+me|myself|this\s+is|(?:full\s+)?name\s*[:=]|user(?:name)?\s*[:=]|signed\s+(?:by|off\s+by)?\s*[:=]?|client\s*[:=]|customer\s*[:=]|patient\s*[:=]|doctor\s*[:=]|author\s*[:=]|owner\s*[:=]|admin\s*[:=]|handle\s*[:=]|alias\s*[:=]|regards,?\s*|sincerely,?\s*)\s*["']?([a-zA-Z0-9_\-\.\u00C0-\u024F]{2,40}(?:\s+[a-zA-Z0-9_\-\.\u00C0-\u024F]{1,40}){0,2})["']?\b/gi,
     groupIndex: 1,
-    reason: 'Context Engine: Self-identification precursor ("my name is [Name]" / "I am [Name]")',
+    reason: 'Context Engine: Identity / Name label precursor ("Name: [Value]" / "my name is [Name]")',
     confidence: 0.98,
     placeholderPrefix: 'PERSON',
   },

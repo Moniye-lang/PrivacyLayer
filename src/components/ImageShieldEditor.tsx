@@ -124,7 +124,7 @@ export const ImageShieldEditor: React.FC = () => {
 
   // 4. Pending Selection Picker State
   const [pendingRect, setPendingRect] = useState<ImageRect | null>(null);
-  const [selectedType, setSelectedType] = useState<EntityType>('API_KEY');
+  const [selectedType, setSelectedType] = useState<EntityType>('CUSTOM_TERM');
   const [customLabel, setCustomLabel] = useState<string>('');
 
   // 5. Processing & Result State
@@ -324,7 +324,13 @@ export const ImageShieldEditor: React.FC = () => {
       };
     }
 
-    const typeKey = selectedType === 'CUSTOM_TERM' && customLabel.trim() ? customLabel.trim().toUpperCase() : selectedType;
+    let typeKey: string;
+    if (selectedType === 'CUSTOM_TERM') {
+      const cleanCustom = customLabel.trim().toUpperCase().replace(/[^A-Z0-9_]/g, '_');
+      typeKey = cleanCustom || 'CUSTOM_TERM';
+    } else {
+      typeKey = selectedType;
+    }
     const existingCount = selections.filter((s) => s.entityType === selectedType).length;
     const counterStr = String(existingCount + 1).padStart(3, '0');
     const placeholder = `[[${typeKey}_${counterStr}]]`;
@@ -352,7 +358,13 @@ export const ImageShieldEditor: React.FC = () => {
   const confirmSelection = () => {
     if (!pendingRect) return;
 
-    const typeKey = selectedType === 'CUSTOM_TERM' && customLabel.trim() ? customLabel.trim().toUpperCase() : selectedType;
+    let typeKey: string;
+    if (selectedType === 'CUSTOM_TERM') {
+      const cleanCustom = customLabel.trim().toUpperCase().replace(/[^A-Z0-9_]/g, '_');
+      typeKey = cleanCustom || 'CUSTOM_TERM';
+    } else {
+      typeKey = selectedType;
+    }
     const existingCount = selections.filter((s) => s.entityType === selectedType).length;
     const counterStr = String(existingCount + 1).padStart(3, '0');
     const placeholder = `[[${typeKey}_${counterStr}]]`;
@@ -840,26 +852,44 @@ displayHeight=${displayedDim.height}
               </div>
 
               {/* Active Drawing Tool Category Palette */}
-              <div className="flex items-center space-x-1.5 overflow-x-auto pb-2.5 mb-2 border-b border-grey-850 font-mono text-[11px] scrollbar-none">
-                <span className="text-grey-400 font-bold shrink-0 text-[10px] uppercase tracking-wider pl-1">
-                  Active Tool:
-                </span>
-                {COMMON_ENTITY_TYPES.slice(0, 6).map((t) => (
-                  <button
-                    key={t.type}
-                    onClick={() => setSelectedType(t.type)}
-                    className={`px-2.5 py-1 rounded-lg border transition-all shrink-0 font-bold ${
-                      selectedType === t.type
-                        ? 'border-gold-500 bg-gold-500/20 text-gold-300 shadow-glow-gold scale-105'
-                        : 'border-grey-800 bg-grey-900/60 text-grey-400 hover:border-grey-700 hover:text-grey-200'
-                    }`}
-                  >
-                    {t.label}
-                  </button>
-                ))}
-                <span className="text-[10px] text-grey-500 font-sans hidden md:inline pl-2 italic shrink-0">
-                  💡 Tap anywhere on text to drop a mask, or drag to size.
-                </span>
+              <div className="flex flex-col space-y-2 pb-2.5 mb-2 border-b border-grey-850 font-mono text-[11px]">
+                <div className="flex items-center space-x-1.5 overflow-x-auto scrollbar-none">
+                  <span className="text-grey-400 font-bold shrink-0 text-[10px] uppercase tracking-wider pl-1">
+                    Active Tool:
+                  </span>
+                  {COMMON_ENTITY_TYPES.map((t) => (
+                    <button
+                      key={t.type}
+                      onClick={() => setSelectedType(t.type)}
+                      className={`px-2.5 py-1 rounded-lg border transition-all shrink-0 font-bold text-[11px] ${
+                        selectedType === t.type
+                          ? 'border-gold-500 bg-gold-500/20 text-gold-300 shadow-glow-gold scale-105'
+                          : 'border-grey-800 bg-grey-900/60 text-grey-400 hover:border-grey-700 hover:text-grey-200'
+                      }`}
+                    >
+                      {t.label}
+                    </button>
+                  ))}
+                </div>
+
+                {/* Inline Custom Label Input when CUSTOM is selected */}
+                {selectedType === 'CUSTOM_TERM' && (
+                  <div className="flex items-center space-x-2 bg-grey-900/90 border border-gold-500/40 rounded-xl px-3 py-1.5 animate-in fade-in slide-in-from-top-1">
+                    <span className="text-[10px] font-bold text-gold-400 shrink-0">Custom Token Label:</span>
+                    <input
+                      type="text"
+                      placeholder="e.g. MONGO_URI, STRIPE_SECRET, TOKEN (optional)"
+                      value={customLabel}
+                      onChange={(e) => setCustomLabel(e.target.value)}
+                      className="flex-1 bg-transparent border-none outline-none text-xs font-mono text-gold-200 placeholder:text-grey-600"
+                    />
+                    {customLabel && (
+                      <span className="font-mono text-[10px] text-gold-400/80 bg-gold-500/10 px-2 py-0.5 rounded border border-gold-500/20 shrink-0">
+                        Preview: [[{customLabel.trim().toUpperCase().replace(/[^A-Z0-9_]/g, '_')}_001]]
+                      </span>
+                    )}
+                  </div>
+                )}
               </div>
 
               {/* Big Responsive Image Canvas Container */}

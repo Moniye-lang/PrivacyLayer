@@ -219,11 +219,16 @@ export interface ShieldResponsePayload {
   detectedEntities: {
     placeholder: string;
     type: EntityType;
-    category: EntityCategory;
-    reason: string;
+    category?: EntityCategory;
+    reason?: string;
     confidence: number;
     votes?: DetectorVote[];
+    text?: string;
+    start?: number;
+    end?: number;
+    evidence?: string;
   }[];
+  plaintextMappings?: Record<string, string>;
   processingTimeMs: number;
   latency?: { totalMs: number };
   expiresAt: string;

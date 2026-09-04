@@ -1024,4 +1024,16 @@ TEAM ROSTER:
       expect(res.protectedPrompt).toBe(v.expected);
     }
   });
+
+  test('General Key-Value / Label-Value Masking: "name: uuuebf", "user: uuuebf", "handle: uuuebf"', async () => {
+    const prompt = 'User profile data: name: uuuebf, handle: dev_master, client: acme_corp';
+    const result = await shieldPrompt({ prompt });
+
+    expect(result.protectedPrompt).toContain('name: [[PERSON_NAME_001]]');
+    expect(result.protectedPrompt).toContain('handle: [[PERSON_NAME_002]]');
+    expect(result.protectedPrompt).toContain('client: [[PERSON_NAME_003]]');
+
+    const revealed = await revealResponse({ sessionId: result.sessionId, aiResponse: result.protectedPrompt });
+    expect(revealed.restoredResponse).toBe(prompt);
+  });
 });

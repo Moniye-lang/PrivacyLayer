@@ -85,6 +85,13 @@ export const ShieldWorkspace: React.FC = () => {
   const [manualOverrides, setManualOverrides] = useState<ManualOverride[]>([]);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
+  // Stage 2 (Protected Output) In-Place Editing & Unmasking State
+  const [isEditingStage2, setIsEditingStage2] = useState<boolean>(false);
+  const [stage2ActiveToken, setStage2ActiveToken] = useState<string | null>(null);
+  const [stage2SelectedText, setStage2SelectedText] = useState<string>('');
+  const [stage2SelectionRange, setStage2SelectionRange] = useState<{ start: number; end: number } | null>(null);
+  const stage2TextareaRef = useRef<HTMLTextAreaElement>(null);
+
   // Trigger subtle device haptics when supported
   const triggerHaptic = () => {
     if (typeof window !== 'undefined' && 'vibrate' in navigator) {
@@ -290,6 +297,121 @@ export const ShieldWorkspace: React.FC = () => {
 
     setSelectedText('');
     setSelectionRange(null);
+  };
+
+  // Stage 2: In-place text selection on protected prompt
+  const handleStage2TextSelect = () => {
+    if (stage2TextareaRef.current) {
+      const start = stage2TextareaRef.current.selectionStart;
+      const end = stage2TextareaRef.current.selectionEnd;
+      if (start !== end && shieldResult) {
+        const selected = shieldResult.protectedPrompt.substring(start, end);
+        if (selected.trim().length > 0) {
+          setStage2SelectedText(selected.trim());
+          setStage2SelectionRange({ start, end });
+        }
+      }
+    }
+  };
+
+  // Stage 2: 1-Click Unmask token back to original plaintext
+  const handleStage2UnmaskToken = (placeholder: string) => {
+    if (!shieldResult) return;
+    const originalValue = shieldResult.plaintextMappings?.[placeholder];
+    if (!originalValue) return;
+
+    const updatedPrompt = shieldResult.protectedPrompt.split(placeholder).join(originalValue);
+    const updatedMappings = { ...(shieldResult.plaintextMappings || {}) };
+    delete updatedMappings[placeholder];
+
+    const updatedEntities = shieldResult.detectedEntities.filter((e) => e.placeholder !== placeholder);
+
+    const updatedResult: ShieldResponsePayload = {
+      ...shieldResult,
+      protectedPrompt: updatedPrompt,
+      plaintextMappings: updatedMappings,
+      detectedEntities: updatedEntities,
+    };
+
+    setShieldResult(updatedResult);
+    sessionStorage.setItem(STORAGE_KEY, JSON.stringify(updatedResult));
+
+    // Register an unmask override so future re-shields remember this choice
+    setManualOverrides((prev) => [
+      ...prev,
+      {
+        text: originalValue,
+        start: 0,
+        end: originalValue.length,
+        action: 'UNMASK',
+      },
+    ]);
+
+    setStage2ActiveToken(null);
+    triggerHaptic();
+    showToast(`Unmasked "${originalValue}" and restored original text.`);
+  };
+
+  // Stage 2: In-place Masking of newly selected text
+  const handleStage2MaskText = (type: EntityType = 'CUSTOM_TERM') => {
+    if (!shieldResult || !stage2SelectedText) return;
+    const trimmed = stage2SelectedText.trim();
+    if (!trimmed) return;
+
+    const typeKey = type === 'CUSTOM_TERM' ? 'CUSTOM_TERM' : type;
+    const existingCount = shieldResult.detectedEntities.filter((e) => e.type === type).length;
+    const counterStr = String(existingCount + 1).padStart(3, '0');
+    const placeholder = `[[${typeKey}_${counterStr}]]`;
+
+    const updatedPrompt = shieldResult.protectedPrompt.replace(trimmed, placeholder);
+    const updatedMappings = {
+      ...shieldResult.plaintextMappings,
+      [placeholder]: trimmed,
+    };
+
+    const updatedEntities = [
+      ...shieldResult.detectedEntities,
+      {
+        placeholder,
+        type,
+        text: trimmed,
+        start: 0,
+        end: trimmed.length,
+        confidence: 1.0,
+        evidence: 'Stage 2 In-Place Manual Mask',
+      },
+    ];
+
+    const updatedResult: ShieldResponsePayload = {
+      ...shieldResult,
+      protectedPrompt: updatedPrompt,
+      plaintextMappings: updatedMappings,
+      detectedEntities: updatedEntities,
+    };
+
+    setShieldResult(updatedResult);
+    sessionStorage.setItem(STORAGE_KEY, JSON.stringify(updatedResult));
+
+    if (!customTerms.includes(trimmed)) {
+      setCustomTerms((prev) => [...prev, trimmed]);
+    }
+    learnedCacheStore.addCustomTerm(trimmed, type);
+
+    setStage2SelectedText('');
+    setStage2SelectionRange(null);
+    triggerHaptic();
+    showToast(`Masked "${trimmed}" as ${placeholder} in Stage 2.`);
+  };
+
+  // Stage 2: Direct prompt textarea editing
+  const handleStage2DirectEdit = (newPromptText: string) => {
+    if (!shieldResult) return;
+    const updatedResult: ShieldResponsePayload = {
+      ...shieldResult,
+      protectedPrompt: newPromptText,
+    };
+    setShieldResult(updatedResult);
+    sessionStorage.setItem(STORAGE_KEY, JSON.stringify(updatedResult));
   };
 
   // Handle Shield Prompt (1-Tap Shield & Copy)
@@ -704,16 +826,131 @@ export const ShieldWorkspace: React.FC = () => {
               <div className="flex-1 space-y-2">
                 <div className="flex items-center justify-between font-mono text-[11px]">
                   <span className="font-semibold text-grey-400">Sanitized Prompt:</span>
-                  {shieldResult && (
-                    <span className={`font-bold font-mono ${shieldResult.safetyVerdict === 'REVIEW REQUIRED' ? 'text-amber-400' : 'text-gold-400'}`}>
-                      Score: <span className="text-gold-300 text-sm font-extrabold">{animatedScore} / 100</span>
-                    </span>
-                  )}
+                  <div className="flex items-center space-x-2">
+                    {shieldResult && (
+                      <button
+                        onClick={() => {
+                          setIsEditingStage2(!isEditingStage2);
+                          setStage2ActiveToken(null);
+                        }}
+                        className="px-2 py-0.5 rounded-lg border border-grey-750 bg-grey-900 hover:border-gold-500/50 text-[10px] text-gold-300 transition-all font-mono active:scale-95"
+                      >
+                        {isEditingStage2 ? '👁 View Tokens' : '✏️ Edit Directly'}
+                      </button>
+                    )}
+                    {shieldResult && (
+                      <span className={`font-bold font-mono ${shieldResult.safetyVerdict === 'REVIEW REQUIRED' ? 'text-amber-400' : 'text-gold-400'}`}>
+                        Score: <span className="text-gold-300 text-sm font-extrabold">{animatedScore} / 100</span>
+                      </span>
+                    )}
+                  </div>
                 </div>
 
-                <div className="relative min-h-[150px] rounded-xl border border-gold-500/30 bg-grey-900/90 p-3 font-mono text-xs text-gold-200 leading-relaxed overflow-y-auto max-h-[220px]">
+                {/* Stage 2 Content: Direct Edit Textarea vs Interactive Clickable Token View */}
+                <div className="relative min-h-[160px] rounded-xl border border-gold-500/30 bg-grey-900/90 p-3 font-mono text-xs text-gold-200 leading-relaxed overflow-y-auto max-h-[250px]">
                   {shieldResult ? (
-                    <p className="whitespace-pre-wrap animate-fade-in-up">{shieldResult.protectedPrompt}</p>
+                    isEditingStage2 ? (
+                      <div className="space-y-2">
+                        <textarea
+                          ref={stage2TextareaRef}
+                          value={shieldResult.protectedPrompt}
+                          onChange={(e) => handleStage2DirectEdit(e.target.value)}
+                          onSelect={handleStage2TextSelect}
+                          rows={5}
+                          className="w-full resize-none bg-transparent font-mono text-xs text-gold-200 outline-none leading-relaxed"
+                          placeholder="Edit protected prompt..."
+                        />
+                        {stage2SelectedText && (
+                          <div className="flex items-center space-x-1.5 pt-1 border-t border-grey-800 text-[10px] overflow-x-auto">
+                            <span className="text-grey-400 font-bold shrink-0">Mask &quot;{stage2SelectedText.substring(0, 15)}...&quot; as:</span>
+                            <button
+                              onClick={() => handleStage2MaskText('CUSTOM_TERM')}
+                              className="px-2 py-0.5 rounded bg-gold-500/20 border border-gold-500/40 text-gold-300 font-bold shrink-0 hover:bg-gold-500/30"
+                            >
+                              CUSTOM
+                            </button>
+                            <button
+                              onClick={() => handleStage2MaskText('PERSON_NAME')}
+                              className="px-2 py-0.5 rounded bg-indigo-500/20 border border-indigo-500/40 text-indigo-300 font-bold shrink-0 hover:bg-indigo-500/30"
+                            >
+                              PERSON
+                            </button>
+                            <button
+                              onClick={() => handleStage2MaskText('COMPANY_SECRET')}
+                              className="px-2 py-0.5 rounded bg-pink-500/20 border border-pink-500/40 text-pink-300 font-bold shrink-0 hover:bg-pink-500/30"
+                            >
+                              SECRET
+                            </button>
+                            <button
+                              onClick={() => handleStage2MaskText('API_KEY')}
+                              className="px-2 py-0.5 rounded bg-amber-500/20 border border-amber-500/40 text-amber-300 font-bold shrink-0 hover:bg-amber-500/30"
+                            >
+                              API_KEY
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    ) : (
+                      <div className="whitespace-pre-wrap leading-relaxed animate-fade-in-up">
+                        {shieldResult.protectedPrompt.split(/(\[\[[A-Z0-9_]+?_\d{3,4}\]\])/g).map((part, index) => {
+                          const isToken = /^\[\[[A-Z0-9_]+?_\d{3,4}\]\]$/.test(part);
+                          if (isToken) {
+                            const originalVal = shieldResult.plaintextMappings?.[part] || 'Protected Value';
+                            const isSelected = stage2ActiveToken === part;
+
+                            return (
+                              <span key={index} className="relative inline-block my-0.5 mx-0.5">
+                                <button
+                                  onClick={() => setStage2ActiveToken(isSelected ? null : part)}
+                                  className={`inline-flex items-center space-x-1 px-1.5 py-0.5 rounded font-mono text-[11px] font-bold transition-all border ${
+                                    isSelected
+                                      ? 'bg-gold-400 text-grey-950 border-gold-300 shadow-glow-gold scale-105'
+                                      : 'bg-gold-500/20 text-gold-300 border-gold-500/40 hover:bg-gold-500/30 hover:border-gold-400'
+                                  }`}
+                                  title={`Tap to unmask "${originalVal}"`}
+                                >
+                                  <span>{part}</span>
+                                  <span className="text-[8px] opacity-75">▼</span>
+                                </button>
+
+                                {/* Token Popover Action */}
+                                {isSelected && (
+                                  <div className="absolute left-0 top-full mt-1.5 z-40 w-64 rounded-xl border border-gold-500/60 bg-grey-950 p-3 shadow-2xl space-y-2 animate-in fade-in slide-in-from-top-1 text-left">
+                                    <div className="border-b border-grey-800 pb-1.5">
+                                      <span className="text-[9px] uppercase tracking-wider text-grey-400 font-bold block">Original Text:</span>
+                                      <span className="font-mono text-xs text-white font-bold break-all">{originalVal}</span>
+                                    </div>
+
+                                    <div className="flex flex-col space-y-1 pt-1">
+                                      <button
+                                        onClick={() => handleStage2UnmaskToken(part)}
+                                        className="flex items-center justify-center space-x-1.5 w-full rounded-lg bg-gradient-gold py-1.5 text-[11px] font-bold text-grey-950 shadow-glow-gold transition-all active:scale-95"
+                                      >
+                                        <Unlock className="h-3 w-3" />
+                                        <span>🔓 Unmask (Restore Plaintext)</span>
+                                      </button>
+
+                                      <button
+                                        onClick={() => {
+                                          handleStage2DirectEdit(shieldResult.protectedPrompt.replace(part, ''));
+                                          setStage2ActiveToken(null);
+                                          showToast(`Removed token ${part}`);
+                                        }}
+                                        className="flex items-center justify-center space-x-1.5 w-full rounded-lg bg-grey-900 hover:bg-rose-500/20 border border-grey-800 hover:border-rose-500/40 py-1 text-[10px] text-grey-400 hover:text-rose-300 transition-all"
+                                      >
+                                        <Trash2 className="h-2.5 w-2.5" />
+                                        <span>Delete Token</span>
+                                      </button>
+                                    </div>
+                                  </div>
+                                )}
+                              </span>
+                            );
+                          }
+                          return <span key={index}>{part}</span>;
+                        })}
+                      </div>
+                    )
                   ) : (
                     <div className="flex h-32 items-center justify-center text-center text-grey-500 font-sans text-xs">
                       Run <strong>🛡 Step 1</strong> to generate protected output.

@@ -59,10 +59,19 @@ const CONTEXT_RULES: ContextPrecursorRule[] = [
   {
     type: 'PERSON_NAME',
     category: 'PII',
-    pattern: /(?<![-_])\b(?:CEO|CTO|CFO|COO|President|Director|VP|Manager|Lead|Engineer|Developer|Dr\.|Prof\.|Mr\.|Mrs\.|Ms\.|Founder|Co-founder|Partner|Chairperson|Architect|Consultant|Analyst|Specialist|Officer|Coordinator|Representative|Agent|Speaker|Presenter|Attendee|Assignee|Reporter|Author)\s+([A-Z\u00C0-\u024F\u1E00-\u1EFF][a-zA-Z\u00C0-\u024F\u1E00-\u1EFF]{1,20}(?:\s+[A-Z\u00C0-\u024F\u1E00-\u1EFF][a-zA-Z\u00C0-\u024F\u1E00-\u1EFF]{1,20})?)\b|\b(?:Customer|Client|Admin|Owner|Contact|Full\s+Name|First\s+Name|Last\s+Name|User|Username|Employee|Applicant|Candidate|Patient|Member|Account\s+Holder|Author|Recipient|Sender|Agent|Supervisor|Signed\s+by|(?<!\b(?:Project|Repo|Repository|Codebase|Database|DB|File|App|Application|Service|Table|Column|Field|Bucket|Secret|Key|Host|Server|Domain|Site)\s+)Name)(?:\s*(?:Name|Person|Holder|Details))?\s*[:=]\s*([a-zA-Z\u00C0-\u024F\u1E00-\u1EFF]{2,20}(?:\s+[a-zA-Z\u00C0-\u024F\u1E00-\u1EFF]{2,20}){0,2})\b/gi,
+    pattern: /(?<![-_])\b(?:CEO|CTO|CFO|COO|President|Director|VP|Manager|Lead|Engineer|Developer|Dr\.|Prof\.|Mr\.|Mrs\.|Ms\.|Founder|Co-founder|Partner|Chairperson|Architect|Consultant|Analyst|Specialist|Officer|Coordinator|Representative|Agent|Speaker|Presenter|Attendee|Assignee|Reporter|Author)\s+([A-Z\u00C0-\u024F\u1E00-\u1EFF][a-zA-Z\u00C0-\u024F\u1E00-\u1EFF]{1,20}(?:\s+[A-Z\u00C0-\u024F\u1E00-\u1EFF][a-zA-Z\u00C0-\u024F\u1E00-\u1EFF]{1,20})?)\b|\b(?:Customer|Client|Admin|Owner|Contact|Full\s+Name|First\s+Name|Last\s+Name|User|Username|Employee|Applicant|Candidate|Patient|Member|Account\s+Holder|Author|Recipient|Sender|Agent|Supervisor|Signed\s+by|(?<!\b(?:Project|Repo|Repository|Codebase|Database|DB|File|App|Application|Service|Table|Column|Field|Bucket|Secret|Key|Host|Server|Domain|Site)\s+)Name)(?:\s*(?:Name|Person|Holder|Details))?\s*[:=]\s*["']?([a-zA-Z0-9_\-\.\u00C0-\u024F\u1E00-\u1EFF]{2,30}(?:\s+[a-zA-Z0-9_\-\.\u00C0-\u024F\u1E00-\u1EFF]{1,30}){0,2})["']?\b/gi,
     groupIndex: 1,
     reason: 'Context Engine: Professional / Role precursor',
     confidence: 0.98,
+  },
+  // 2a. Direct Name & Identity Property Declarations (e.g., "name: uuuebf", "user: alex99", "handle: jsmith")
+  {
+    type: 'PERSON_NAME',
+    category: 'PII',
+    pattern: /(?<![-_])\b(?:name|full_name|first_name|last_name|user|username|client|customer|patient|doctor|physician|contact|author|owner|admin|member|agent|caller|recipient|sender|subscriber|assignee|creator|handle|nickname|alias|identity)\s*[:=]\s*["']?([a-zA-Z0-9_\-\.\u00C0-\u024F\u1E00-\u1EFF]{2,40}(?:\s+[a-zA-Z0-9_\-\.\u00C0-\u024F\u1E00-\u1EFF]{1,40}){0,2})["']?/gi,
+    groupIndex: 1,
+    reason: 'Context Engine: Identity label declaration (e.g. "name: [value]" / "user: [value]")',
+    confidence: 0.99,
   },
   // 2b. Managed By / Owned By / Assigned To Precursors
   {

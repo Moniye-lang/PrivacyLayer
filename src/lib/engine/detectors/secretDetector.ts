@@ -374,6 +374,24 @@ const SECRET_PATTERNS: SecretPatternRule[] = [
     confidence: 0.96,
     priority: LOW_PRIO,
   },
+  // 26. Generic Secret, Key & Security Code Property Assignments (e.g. "secret: xyz", "code: 8847", "client_secret: ...")
+  {
+    type: 'COMPANY_SECRET',
+    name: 'Secret Property Assignment',
+    pattern: /(?<![-_])\b(?:secret|code|priv_key|private_key|api_secret|app_secret|client_secret|access_code|security_code|pin_code|auth_code|access_secret|webhook_secret|signing_secret|encryption_key|master_key)\s*[:=]\s*["']?([^\s"';,\}\)\n]{3,128})["']?/gi,
+    reason: 'Context rule: secret / code property assignment',
+    confidence: 0.97,
+    priority: LOW_PRIO,
+  },
+  // 27. Generic Identity & Token Property Assignments (e.g. "tenant_id: 123", "session_id: abc")
+  {
+    type: 'CUSTOM_TERM',
+    name: 'Identifier Property Assignment',
+    pattern: /(?<![-_])\b(?:session_id|session_token|csrf_token|xsrf_token|refresh_token|tenant_id|account_id|client_id|customer_id|user_id|member_id|patient_id|employee_id|device_id)\s*[:=]\s*["']?([a-zA-Z0-9_\-\.]{4,128})["']?/gi,
+    reason: 'Context rule: identifier / token property assignment',
+    confidence: 0.97,
+    priority: LOW_PRIO,
+  },
 ];
 
 const NON_SECRET_ENGLISH_WORDS = /^(?:Bearer|now|then|today|yesterday|tomorrow|tonight|currently|got|rotated|updated|changed|reset|expired|compromised|leaked|shared|used|needed|required|failed|passed|working|tested|saved|stored|please|swap|shift|ends|starts|here|there|below|above|prompt|field|fields|input|selector|label|text|count|total|list|length|name|type|id|icon|button|form|header|headers|authentication|auth|documentation|docs|string|value|values|required|optional|setting|settings|credentials|details|info|information|help|policy|manager|example|test|sample|slow|fast|load|stable|metrics|dashboard|service|services|everything|nothing|something|anything|api|key|token|secret|secrets|password|passwords|repository|repo|contains|contain|contained|containing|does|do|doing|done|did|phrase|phrases|word|words|sentence|sentences|called|named|file|files|is|was|are|were|will|be|been|being|have|has|had|not|but|and|or|so|if|for|in|on|at|to|from|with|by|about|an|a|the|this|that|these|those)$/i;
