@@ -91,6 +91,16 @@ const CONTEXT_RULES: ContextPrecursorRule[] = [
     reason: 'Context Engine: Email label precursor',
     confidence: 0.99,
   },
+  // 2d. Address Label Precursors
+  {
+    type: 'ADDRESS',
+    category: 'PII',
+    pattern: /(?<![-_])\b(?:Address|Physical\s+Address|Street\s+Address|Billing\s+Address|Shipping\s+Address|Home\s+Address|Residential\s+Address|Office\s+Address)\s*[:=]\s*([^\n\r;]+)/gi,
+    groupIndex: 1,
+    reason: 'Context Engine: Address label precursor',
+    confidence: 0.98,
+    priority: PriorityLevel.CONTEXT + 15,
+  },
   // 3. Project Precursors
   {
     type: 'PROJECT_CODENAME',

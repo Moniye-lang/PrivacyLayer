@@ -221,6 +221,24 @@ const SECRET_PATTERNS: SecretPatternRule[] = [
     confidence: 0.99,
     priority: HIGH_PRIO,
   },
+  // 14k. Stripe Card Tokens, Charges, Customers, & Payment Tokens
+  {
+    type: 'API_KEY',
+    name: 'Stripe Token / Card Identifier',
+    pattern: /(tok_[0-9a-zA-Z]{20,60}|card_[0-9a-zA-Z]{20,60}|ch_[0-9a-zA-Z]{20,60}|pi_[0-9a-zA-Z]{20,60}|cus_[0-9a-zA-Z]{14,60}|sub_[0-9a-zA-Z]{14,60})/g,
+    reason: 'Context rule: Stripe Token / Card Identifier',
+    confidence: 0.99,
+    priority: HIGH_PRIO,
+  },
+  // 14l. Stripe Webhook Signing Secrets
+  {
+    type: 'SOURCE_CODE_SECRET',
+    name: 'Stripe Webhook Signing Secret',
+    pattern: /(whsec_[0-9a-zA-Z]{20,120})/g,
+    reason: 'Context rule: Webhook Signing Secret',
+    confidence: 0.99,
+    priority: HIGH_PRIO,
+  },
   // 15. PEM Certificates
   {
     type: 'SOURCE_CODE_SECRET',
@@ -365,6 +383,15 @@ const SECRET_PATTERNS: SecretPatternRule[] = [
     confidence: 0.99,
     priority: MID_PRIO,
   },
+  // 24b. Cloud DB Host / RDS Host Endpoint
+  {
+    type: 'URL',
+    name: 'Cloud DB Host Endpoint',
+    pattern: /(?:(?:db_host|database_host|rds_host|db_server|db_endpoint|host|server)\s*[:=]\s*["']?([a-zA-Z0-9_.-]+(?:\.[a-zA-Z0-9_.-]+)+)["']?|[a-zA-Z0-9_.-]+\.(?:[a-zA-Z0-9_.-]+\.)?(?:rds\.amazonaws\.com|database\.azure\.com|cloudsql\.google\.com|internal|local))/gi,
+    reason: 'Context rule: Cloud Database Host Endpoint',
+    confidence: 0.99,
+    priority: MID_PRIO,
+  },
   // 25. Generic Sensitive Env Variables
   {
     type: 'SOURCE_CODE_SECRET',
@@ -391,6 +418,15 @@ const SECRET_PATTERNS: SecretPatternRule[] = [
     reason: 'Context rule: identifier / token property assignment',
     confidence: 0.97,
     priority: LOW_PRIO,
+  },
+  // 27b. Order, Ticket, and Case Reference Identifiers
+  {
+    type: 'CUSTOM_TERM',
+    name: 'Order / Ticket / Reference ID',
+    pattern: /(?:#(?:ORD|TICK|TCK|REF|INV|CASE|TICKET|ORDER)-[0-9A-Za-z_-]{3,30}|\b(?:order|ticket|ref|invoice|case|tracking)\s*(?:#|id|num|number)?\s*[:=]?\s*#?([A-Z0-9]{2,10}-[0-9A-Za-z_-]{3,30}|[A-Z0-9_]{6,30})\b)/gi,
+    reason: 'Context rule: Order / Ticket / Case Reference ID',
+    confidence: 0.98,
+    priority: MID_PRIO,
   },
 ];
 
@@ -555,6 +591,112 @@ export class SecretDetector implements Detector {
           text: originalMatchedText,
         });
       }
+    }
+
+    // 2. High-Entropy Alphanumeric Scanner & Preceding Context Classifier
+    // When encountering mixed alphanumeric tokens (numbers and letters together):
+    // Read the preceding context/label to classify, defaulting to PASSWORD if no label is present.
+    const alphanumericPattern = /\b(?=[a-zA-Z0-9!@#$%^&*_-]*[0-9])(?=[a-zA-Z0-9!@#$%^&*_-]*[a-zA-Z])[a-zA-Z0-9!@#$%^&*_-]{5,64}\b/g;
+    let alphaMatch: RegExpExecArray | null;
+
+    while ((alphaMatch = alphanumericPattern.exec(normalizedText)) !== null) {
+      let matchedToken = alphaMatch[0];
+      const matchStart = alphaMatch.index;
+      const matchEnd = matchStart + matchedToken.length;
+
+      // Clean trailing punctuation
+      while (matchedToken.length > 4 && /[.,;:!?]$/.test(matchedToken)) {
+        matchedToken = matchedToken.slice(0, -1);
+      }
+
+      // Skip common non-secret tokens
+      if (NON_SECRET_ENGLISH_WORDS.test(matchedToken) || /^(?:true|false|null|undefined)$/i.test(matchedToken)) {
+        continue;
+      }
+      // Skip text that is part of existing [[TYPE_001]] placeholders or placeholder patterns
+      if (/^[A-Z_]+_\d{3,}$/.test(matchedToken) ||
+          normalizedText.substring(Math.max(0, matchStart - 2), matchStart) === '[[' ||
+          normalizedText.substring(matchEnd, Math.min(normalizedText.length, matchEnd + 2)) === ']]') {
+        continue;
+      }
+      // Skip dates (e.g. 2024-05-12, 12/05/2024), standard CSS/HTML colors (#fff), simple version numbers (v1.2.3, 14.2.15)
+      if (/^\d{4}-\d{2}-\d{2}$/.test(matchedToken) || /^v?\d+\.\d+(?:\.\d+)*$/i.test(matchedToken) || /^#[0-9a-fA-F]{3,8}$/.test(matchedToken)) {
+        continue;
+      }
+      // Skip simple units like 100px, 50kg, 20mins, or standalone integers
+      if (/^\d+(?:px|em|rem|vh|vw|pt|cm|mm|in|kg|g|mg|lbs|oz|km|m|ft|sec|min|mins|hr|hrs|days|weeks|months|years|ms)$/i.test(matchedToken) || /^\d+$/.test(matchedToken)) {
+        continue;
+      }
+
+      let charsetScore = 0;
+      if (/[a-z]/.test(matchedToken)) charsetScore++;
+      if (/[A-Z]/.test(matchedToken)) charsetScore++;
+      if (/[0-9]/.test(matchedToken)) charsetScore++;
+      if (/[!@#$%^&*()_+\-=\[\]{}|;:,.<>?/~`]/.test(matchedToken)) charsetScore++;
+
+      if (charsetScore < 2) {
+        continue;
+      }
+
+      // Check if this span is already covered by an existing high-priority rule
+      const joinedStart = matchStart;
+      const joinedEnd = joinedStart + matchedToken.length;
+      const start = mapToOriginalOffset(joinedStart);
+      const end = mapToOriginalOffset(joinedEnd);
+
+      const isAlreadyCovered = candidates.some((c) =>
+        Math.max(c.start, start) < Math.min(c.end, end)
+      );
+      if (isAlreadyCovered) {
+        continue;
+      }
+
+      // Read preceding context window (up to 50 characters before the token)
+      const contextWindowStart = Math.max(0, matchStart - 50);
+      const precedingText = normalizedText.substring(contextWindowStart, matchStart).toLowerCase();
+
+      let targetType: EntityType = 'PASSWORD';
+      let evidence = 'Mixed Alphanumeric Secret (Fallback Password)';
+
+      if (/(?:\b(?:card[\s_-]*token|api[\s_-]*token|access[\s_-]*token|auth[\s_-]*token|token|api[\s_-]*key|client[\s_-]*token)\b|\b(?:tok_|card_|ghp_|sk_))/i.test(precedingText) || matchedToken.startsWith('tok_') || matchedToken.startsWith('card_')) {
+        targetType = 'API_KEY';
+        evidence = 'Contextual Token / API Key';
+      } else if (/(?:\b(?:temp[\s_-]*password|temporary[\s_-]*password|new[\s_-]*password|admin[\s_-]*password|password|passwd|pwd|passcode|passphrase|secret[\s_-]*pass)\b)/i.test(precedingText)) {
+        targetType = 'PASSWORD';
+        evidence = 'Contextual Password';
+      } else if (/(?:\b(?:webhook[\s_-]*signing[\s_-]*key|signing[\s_-]*key|secret[\s_-]*key|private[\s_-]*key|app[\s_-]*secret|client[\s_-]*secret|secret)\b|\bwhsec_)/i.test(precedingText) || matchedToken.startsWith('whsec_')) {
+        targetType = 'COMPANY_SECRET';
+        evidence = 'Contextual Secret / Signing Key';
+      } else if (/(?:\b(?:order[\s_-]*id|order[\s_-]*num|order|ticket[\s_-]*id|ticket|invoice|ref[\s_-]*id|ref|account[\s_-]*id|customer[\s_-]*id)\b|#ord|#tck|#ref)/i.test(precedingText) || /^#?(?:ORD|TCK|REF|INV)-/i.test(matchedToken)) {
+        targetType = 'CUSTOM_TERM';
+        evidence = 'Contextual Order / Reference ID';
+      } else if (/(?:\b(?:db[\s_-]*host|database[\s_-]*host|host|server|domain|endpoint)\b)/i.test(precedingText) || matchedToken.includes('.rds.amazonaws.com') || matchedToken.includes('.internal')) {
+        targetType = 'URL';
+        evidence = 'Contextual Host / Endpoint';
+      } else {
+        // Standalone mixed alphanumeric token without preceding context:
+        // Must be >= 6 characters and contain complex character set (uppercase/lowercase/numbers/special)
+        if (matchedToken.length >= 6 && (charsetScore >= 3 || /[!@#$%^&*()_+\-=\[\]{}|;:,.<>?/~`]/.test(matchedToken) || (/[a-z]/.test(matchedToken) && /[A-Z]/.test(matchedToken) && /[0-9]/.test(matchedToken)))) {
+          targetType = 'PASSWORD';
+          evidence = 'Mixed Alphanumeric Secret (Standalone Password)';
+        } else {
+          continue;
+        }
+      }
+
+      const originalMatchedText = text.substring(start, end);
+      candidates.push({
+        id: `secret_alpha_${targetType.toLowerCase()}_${start}_${end}`,
+        start,
+        end,
+        entityType: targetType,
+        confidence: 0.96,
+        priority: PriorityLevel.REGEX + 4,
+        detectorId: this.id,
+        evidence,
+        atomic: true,
+        text: originalMatchedText,
+      });
     }
 
     return candidates;

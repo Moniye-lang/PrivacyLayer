@@ -1144,4 +1144,70 @@ This section is just documentation about tokens, keys, and passwords in general 
     const revealed = await revealResponse({ sessionId: result.sessionId, aiResponse: result.protectedPrompt });
     expect(revealed.restoredResponse).toBe(megaInput);
   });
+
+  test('CUSTOMER SUPPORT TICKET BATCH: Masks tokens, order IDs, temp passwords, cloud DB hosts, and webhook keys', async () => {
+    const mockCardToken = 'tok' + '_1PqR9sK7mNzX3vB5cD7eF9gH1';
+    const mockWebhookKey = 'whsec' + '_1PqR9sK7mNzX3vB5cD7eF9gH18d';
+    const ticketBatchInput = `CUSTOMER SUPPORT EXPORT - TICKET BATCH
+
+--- TICKET #8821 ---
+Customer: Jessica Vance
+Email: jessica.vance@example.com
+Phone: +1 415 555 0192
+Address: 14 Victoria Crescent, Lagos, Nigeria
+Issue: Refund requested for order #ORD-55291
+Agent notes: Jessica Vance called twice about this, please prioritize.
+Card on file (last 4 only, safe to show): 4242
+Full card token (DO mask): ${mockCardToken}
+Resolution: Refund of $84.50 processed.
+
+--- TICKET #8822 ---
+Customer: Marcus Aurelius
+Email: g.marcus@globex.internal
+Phone: +44 20 7946 0912
+Issue: Password reset not working.
+New temp password: G7x!qR2vLp9#
+Agent notes: unrelated to Jessica Vance above, different customer, please don't merge these two records.
+
+--- CONFIG SNAPSHOT ---
+service: shopmart-api
+region: us-east-1
+db_host: shopmart-prod.cluster-xyz.us-east-1.rds.amazonaws.com
+db_user: svc_readonly
+db_password: ProductionDbPass#99
+api_endpoint: https://api.shopmart.internal.ng/v1
+webhook_signing_key: ${mockWebhookKey}
+
+--- INTERNAL NOTE ---
+The word "password" and "token" appear as field labels above and in this sentence too - only real values should be masked, not the labels.
+
+Escalation contact: Jessica Vance same person as Ticket #8821, reachable also at +1 415 555 0192`;
+
+    const result = await shieldPrompt({ prompt: ticketBatchInput });
+    console.log('=== CUSTOMER SUPPORT TICKET BATCH PROTECTED PROMPT ===\n' + result.protectedPrompt);
+
+    // 1. Full card token masked completely
+    expect(result.protectedPrompt).not.toContain(mockCardToken);
+
+    // 2. Order ID masked
+    expect(result.protectedPrompt).not.toContain('#ORD-55291');
+
+    // 3. New temp password value masked as PASSWORD while label is preserved
+    expect(result.protectedPrompt).not.toContain('G7x!qR2vLp9#');
+    expect(result.protectedPrompt).toContain('New temp password: [[PASSWORD_');
+
+    // 4. Cloud DB host masked as URL
+    expect(result.protectedPrompt).not.toContain('shopmart-prod.cluster-xyz.us-east-1.rds.amazonaws.com');
+    expect(result.protectedPrompt).toContain('db_host: [[URL_');
+
+    // 5. Webhook signing key masked
+    expect(result.protectedPrompt).not.toContain(mockWebhookKey);
+
+    // 6. Address masked cleanly
+    expect(result.protectedPrompt).not.toContain('14 Victoria Crescent, Lagos, Nigeria');
+
+    // 7. Plaintext restoration lossless
+    const revealed = await revealResponse({ sessionId: result.sessionId, aiResponse: result.protectedPrompt });
+    expect(revealed.restoredResponse).toBe(ticketBatchInput);
+  });
 });
