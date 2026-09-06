@@ -918,28 +918,35 @@ displayHeight=${displayedDim.height}
                   />
 
                   {/* Confirmed Selections Dynamic Overlay */}
-                  {isImageLoaded &&
-                    selections.map((sel) => {
-                      const style = nativeToDisplayStyle(sel.rect, imgRef.current);
-                      const displayW = parseInt(String(style.width || '100'), 10);
-                      const displayLabel = displayW < 95
-                        ? getAbbreviatedPlaceholder(sel.placeholder, true)
-                        : sel.placeholder;
+                  {(() => {
+                    const seenEditorPlaceholders = new Set<string>();
+                    return isImageLoaded &&
+                      selections.map((sel) => {
+                        const style = nativeToDisplayStyle(sel.rect, imgRef.current);
+                        const displayW = parseInt(String(style.width || '100'), 10);
+                        const displayLabel = displayW < 95
+                          ? getAbbreviatedPlaceholder(sel.placeholder, true)
+                          : sel.placeholder;
 
-                      return (
-                        <div
-                          key={sel.id}
-                          style={style}
-                          className="absolute border-2 border-gold-500/80 bg-gold-500/20 rounded-sm flex items-center justify-center group pointer-events-auto overflow-hidden cursor-pointer shadow-sm"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            removeSelection(sel.id);
-                          }}
-                          title="Tap or click to remove redacted region"
-                        >
-                          <span className="font-mono text-[10px] leading-none font-bold text-gold-300 bg-grey-950/95 px-1.5 py-0.5 rounded border border-gold-500/40 truncate max-w-full">
-                            {displayLabel}
-                          </span>
+                        const isDuplicateWrappedLine = seenEditorPlaceholders.has(sel.placeholder);
+                        seenEditorPlaceholders.add(sel.placeholder);
+
+                        return (
+                          <div
+                            key={sel.id}
+                            style={style}
+                            className="absolute border-2 border-gold-500/80 bg-gold-500/20 rounded-sm flex items-center justify-center group pointer-events-auto overflow-hidden cursor-pointer shadow-sm"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              removeSelection(sel.id);
+                            }}
+                            title="Tap or click to remove redacted region"
+                          >
+                            {!isDuplicateWrappedLine && (
+                              <span className="font-mono text-[10px] leading-none font-bold text-gold-300 bg-grey-950/95 px-1.5 py-0.5 rounded border border-gold-500/40 truncate max-w-full">
+                                {displayLabel}
+                              </span>
+                            )}
                           <button
                             onClick={(e) => {
                               e.stopPropagation();
@@ -951,7 +958,8 @@ displayHeight=${displayedDim.height}
                           </button>
                         </div>
                       );
-                    })}
+                    });
+                  })()}
 
                   {/* Currently Drawing Rect Overlay */}
                   {isImageLoaded && currentRect && (

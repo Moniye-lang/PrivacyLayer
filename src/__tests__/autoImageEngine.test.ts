@@ -6,6 +6,9 @@
 
 import { autoDetectImageSensitiveRegions, terminateOcrWorker } from '../lib/engine/image/autoImageShieldEngine';
 import { shieldImage } from '../lib/engine/image/imageShieldEngine';
+import { composeShieldedImageWithSvg } from '../lib/engine/image/svgImageCompositor';
+import { getAbbreviatedPlaceholder } from '../lib/engine/image/imageGeometry';
+import { ImageRevealEngine } from '../lib/engine/image/imageRevealEngine';
 
 describe('Automated (Non-Manual) Image Shielding Test Suite', () => {
   const sampleImageDataUrl = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==';
@@ -195,6 +198,120 @@ describe('Automated (Non-Manual) Image Shielding Test Suite', () => {
       expect(sel.rect.width).toBeGreaterThan(0);
       expect(sel.rect.x).toBeGreaterThanOrEqual(0);
       expect(sel.rect.y).toBeGreaterThanOrEqual(0);
+    }
+  });
+
+  test('Issue 1: Adaptive-shortening fallback always retains double brackets [[...]] on constrained regions', () => {
+    // Test direct helper
+    const abbrev1 = getAbbreviatedPlaceholder('[[PERSON_NAME_001]]', true);
+    expect(abbrev1).toMatch(/^\[\[[A-Z0-9_]+_\d{3}\]\]$/);
+    expect(abbrev1.startsWith('[[')).toBe(true);
+    expect(abbrev1.endsWith(']]')).toBe(true);
+
+    // Even if called with includeBrackets=false or unbracketed input, ensure brackets are enforced
+    const abbrev2 = getAbbreviatedPlaceholder('PERSON_NAME_001', false);
+    expect(abbrev2.startsWith('[[')).toBe(true);
+    expect(abbrev2.endsWith(']]')).toBe(true);
+
+    const abbrev3 = getAbbreviatedPlaceholder('CUSTOM_LABEL', true);
+    expect(abbrev3.startsWith('[[')).toBe(true);
+    expect(abbrev3.endsWith(']]')).toBe(true);
+  });
+
+  test('Issue 4 & Issue 1: Line-wrapped secrets render placeholder label only once, and always bracketed in SVG', async () => {
+    // Two boxes representing a line-wrapped secret
+    const wrappedSelections = [
+      {
+        id: 'line_1_box',
+        rect: { x: 50, y: 100, width: 180, height: 28 },
+        entityType: 'API_KEY' as const,
+        assignedPlaceholder: '[[API_KEY_001]]',
+        evidence: 'Wrapped secret line 1',
+      },
+      {
+        id: 'line_2_box',
+        rect: { x: 50, y: 135, width: 220, height: 28 },
+        entityType: 'API_KEY' as const,
+        assignedPlaceholder: '[[API_KEY_001]]',
+        evidence: 'Wrapped secret line 2',
+      },
+    ];
+
+    const { svgXml } = await composeShieldedImageWithSvg(sampleImageDataUrl, wrappedSelections);
+
+    // Both boxes must have <rect> elements drawn
+    const rectCount = (svgXml.match(/<rect /g) || []).length;
+    expect(rectCount).toBe(2);
+
+    // But <text> must only be rendered ONCE (for the first box)
+    const textMatches = svgXml.match(/<text [^>]*>([^<]+)<\/text>/g) || [];
+    expect(textMatches.length).toBe(1);
+
+    // The single rendered label must be properly bracketed
+    expect(textMatches[0]).toContain('[[API_KEY_001]]');
+  });
+
+  test('Reveal: Safely restores shielded regions regardless of whether stored placeholder had brackets', async () => {
+    const revealEngine = new ImageRevealEngine();
+
+    // Mock restore payload matching sampleImageDataUrl dimensions (1x1)
+    const mockSession = {
+      sessionId: 'test_sess_reveal_001',
+      documentId: 'doc_1',
+      documentVersionId: 'ver_1',
+      imageWidth: 1,
+      imageHeight: 1,
+      encryptedMappings: JSON.stringify([
+        {
+          entityId: 'ent_1',
+          entityType: 'PERSON_NAME',
+          rect: { x: 0, y: 0, width: 1, height: 1 },
+          imageWidth: 1,
+          imageHeight: 1,
+          placeholder: 'PERSON_NAME_001', // Unbracketed legacy placeholder
+          originalDataUrl: sampleImageDataUrl,
+        },
+        {
+          entityId: 'ent_2',
+          entityType: 'API_KEY',
+          rect: { x: 0, y: 0, width: 1, height: 1 },
+          imageWidth: 1,
+          imageHeight: 1,
+          placeholder: '[[API_KEY_001]]', // Properly bracketed placeholder
+          originalDataUrl: sampleImageDataUrl,
+        },
+      ]),
+      createdAt: new Date().toISOString(),
+      lastActivity: new Date().toISOString(),
+      expiresAt: new Date(Date.now() + 3600000).toISOString(),
+      isPurged: false,
+    };
+
+    const mockStore: any = {
+      get: jest.fn().mockResolvedValue(mockSession),
+      save: jest.fn().mockResolvedValue(undefined),
+      touch: jest.fn().mockResolvedValue(undefined),
+      delete: jest.fn().mockResolvedValue(true),
+      purgeExpired: jest.fn().mockResolvedValue(0),
+      count: jest.fn().mockResolvedValue(1),
+    };
+
+    const mockCrypto: any = {
+      encrypt: jest.fn().mockImplementation(async (text) => text),
+      decrypt: jest.fn().mockImplementation(async (text) => text),
+    };
+
+    const customReveal = new ImageRevealEngine(mockStore, mockCrypto);
+    const restored = await customReveal.restore({
+      sessionId: 'test_sess_reveal_001',
+      shieldedImageDataUrl: sampleImageDataUrl,
+    });
+
+    expect(restored.restoredCount).toBe(2);
+    // Both restored entities should have normalized bracketed placeholders
+    for (const ent of restored.restoredEntities) {
+      expect(ent.placeholder.startsWith('[[')).toBe(true);
+      expect(ent.placeholder.endsWith(']]')).toBe(true);
     }
   });
 });

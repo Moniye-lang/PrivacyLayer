@@ -53,13 +53,18 @@ export function getAbbreviatedPlaceholder(placeholder: string, includeBrackets: 
   if (!placeholder) return placeholder;
   // Match [[TYPE_001]] or TYPE_001
   const match = placeholder.match(/^\[\[([A-Z0-9_]+?)_(\d{3,4})\]\]$/) || placeholder.match(/^([A-Z0-9_]+?)_(\d{3,4})$/);
-  if (!match) return placeholder;
+  if (!match) {
+    if (includeBrackets && !placeholder.startsWith('[[')) {
+      return `[[${placeholder.replace(/^\[*|\]*$/g, '')}]]`;
+    }
+    return placeholder;
+  }
 
   const type = match[1];
   const num = match[2];
   const abbrev = ENTITY_TYPE_ABBREVIATIONS[type] || type;
 
-  return includeBrackets ? `[[${abbrev}_${num}]]` : `${abbrev}_${num}`;
+  return includeBrackets ? `[[${abbrev}_${num}]]` : `[[${abbrev}_${num}]]`;
 }
 
 /**

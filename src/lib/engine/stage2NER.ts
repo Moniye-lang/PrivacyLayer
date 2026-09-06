@@ -141,6 +141,18 @@ export function runStage2NER(text: string): DetectedEntity[] {
           continue;
         }
 
+        if (type === 'LOCATION') {
+          // Exclude country / state names appearing in official document headers / titles
+          // (e.g., 'FEDERAL REPUBLIC OF NIGERIA', 'GOVERNMENT OF NIGERIA', 'REPUBLIC OF GHANA')
+          const precedingText = text.substring(Math.max(0, startIndex - 50), startIndex);
+          if (/(?:FEDERAL\s+REPUBLIC\s+OF|REPUBLIC\s+OF|GOVERNMENT\s+OF|KINGDOM\s+OF|COMMONWEALTH\s+OF|UNITED\s+STATES\s+OF|PEOPLE['’]?S\s+REPUBLIC\s+OF)\s*$/i.test(precedingText)) {
+            continue;
+          }
+          if (/(?:FEDERAL\s+REPUBLIC\s+OF|REPUBLIC\s+OF|GOVERNMENT\s+OF|KINGDOM\s+OF)\s+[A-Z\s]+/i.test(currentLine)) {
+            continue;
+          }
+        }
+
         const isOverlapping = detected.some(
           (e) => Math.max(e.start, startIndex) < Math.min(e.end, startIndex + matchText.length)
         );
@@ -209,6 +221,13 @@ export function runStage2NER(text: string): DetectedEntity[] {
     const cleanLastName = lastName.replace(/['’]s$/i, '').replace(/['’]$/, '');
     const possessiveSuffixLen = lastName.length - cleanLastName.length;
 
+    // Exclude corporate and bank suffixes from being misread as person names
+    const isOrgSuffix = /\b(?:Bank|Microfinance|Ltd|Limited|Inc|Incorporated|PLC|Corp|Corporation|LLC|GmbH)\b/i.test(cleanLastName) ||
+                        /\b(?:Bank|Microfinance|Ltd|Limited|Inc|Incorporated|PLC|Corp|Corporation|LLC|GmbH)\b/i.test(firstName);
+    if (isOrgSuffix) {
+      continue;
+    }
+
     const normFirst = firstName.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
     const normLast = cleanLastName.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
 
@@ -276,6 +295,14 @@ export function runStage2NER(text: string): DetectedEntity[] {
       const nextWordMatch = /^[ \t]+([A-Z\u00C0-\u024F\u1E00-\u1EFF][a-zA-Z\u00C0-\u024F\u1E00-\u1EFF]{1,20}(?:['’]s)?)\b/.exec(afterText);
       if (nextWordMatch) {
         const candidateSurname = nextWordMatch[1].replace(/['’]s$/i, '');
+        if (/\b(?:Bank|Microfinance|Ltd|Limited|Inc|Incorporated|PLC|Corp|Corporation|LLC|GmbH)\b/i.test(candidateSurname)) {
+          continue;
+        }
+        // Check if followed by corporate suffix (e.g. "Continental Bank")
+        const followingText = text.substring(endIndex + nextWordMatch[0].length);
+        if (/^[ \t]+(?:Bank|Microfinance|Ltd|Limited|Inc|Incorporated|PLC|Corp|Corporation|LLC|GmbH)\b/i.test(followingText)) {
+          continue;
+        }
         const normSurname = candidateSurname.toLowerCase();
         if (MULTICULTURAL_LAST_NAMES_LOWER.has(normSurname) || /^[A-Z\u00C0-\u024F\u1E00-\u1EFF][a-zA-Z\u00C0-\u024F\u1E00-\u1EFF]{1,19}$/.test(candidateSurname)) {
           // Contiguous name detected

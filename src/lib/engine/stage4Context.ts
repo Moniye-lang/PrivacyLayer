@@ -71,6 +71,16 @@ const STAGE4_CONTEXT_RULES: ContextPrecursorRule[] = [
     confidence: 0.98,
     placeholderPrefix: 'ORGANIZATION',
   },
+  // 5b. Corporate Organization & Bank Name Precursors / Suffixes: "First Continental Bank", "Continental Bank", "Apex Bank"
+  {
+    type: 'ORGANIZATION',
+    category: 'CONTEXTUAL',
+    pattern: /\b((?:First\s+|United\s+|Union\s+|Standard\s+|National\s+|Global\s+|Central\s+|Federal\s+|Apex\s+)?[A-Z\u00C0-\u024F][a-zA-Z0-9&.\'\-]{1,25}(?:\s+[A-Z\u00C0-\u024F][a-zA-Z0-9&.\'\-]{1,25}){0,3}\s+(?:Bank|Microfinance\s+Bank|Ltd|Limited|Inc|Incorporated|PLC|Corp|Corporation|LLC|GmbH))\b/g,
+    groupIndex: 1,
+    reason: 'Context Engine: Corporate organization / bank name recognized by suffix',
+    confidence: 0.98,
+    placeholderPrefix: 'ORGANIZATION',
+  },
   // 6. Department Precursors: "Department of Engineering"
   {
     type: 'ORGANIZATION',
@@ -80,6 +90,36 @@ const STAGE4_CONTEXT_RULES: ContextPrecursorRule[] = [
     reason: 'Context Engine: Department precursor ("Department of Engineering")',
     confidence: 0.96,
     placeholderPrefix: 'ORGANIZATION',
+  },
+  // 7a. National Identification Numbers (NIN / SSN)
+  {
+    type: 'SSN_NATIONAL_ID',
+    category: 'PII',
+    pattern: /\b(?:National\s+Identification(?:\s+Number)?|National\s+Identity(?:\s+Number)?|National\s+ID(?:\s+Number)?|NIN(?:\s+Number)?|SSN|Social\s+Security(?:\s+Number)?)\s*[:=]\s*([A-Za-z0-9]{2,6}(?:[-\/][A-Za-z0-9]{2,6}){1,3}|\d{9,14}|[A-Za-z0-9]{6,16})\b/gi,
+    groupIndex: 1,
+    reason: 'Context Engine: National ID / NIN precursor',
+    confidence: 0.99,
+    placeholderPrefix: 'SSN',
+  },
+  // 7b. Bank Verification Number (BVN)
+  {
+    type: 'BANK_ACCOUNT',
+    category: 'PII',
+    pattern: /\b(?:Bank\s+Verification(?:\s+Number)?|BVN(?:\s+Number)?)\s*[:=]\s*(\d{11})\b/gi,
+    groupIndex: 1,
+    reason: 'Context Engine: Bank Verification Number (BVN) precursor',
+    confidence: 0.99,
+    placeholderPrefix: 'BANK_ACCOUNT',
+  },
+  // 7c. Phone Number Context Precursors
+  {
+    type: 'PHONE_NUMBER',
+    category: 'PII',
+    pattern: /\b(?:Phone(?:\s+Number)?|Telephone|Tel|Mobile(?:\s+Number)?|Cell(?:\s+Phone)?|Call(?:\s+us\s+at)?|Contact\s+(?:Number|Phone)|Hotline|WhatsApp|SMS|Fax|Reach\s+me\s+(?:on|at))\s*[:=]\s*([+0-9\s\-\.\(\)]{7,22})\b/gi,
+    groupIndex: 1,
+    reason: 'Context Engine: Phone number precursor',
+    confidence: 0.99,
+    placeholderPrefix: 'PHONE',
   },
 ];
 
@@ -112,6 +152,10 @@ export function runStage4Context(text: string): DetectedEntity[] {
       if (!matchText || matchText.length < 2) continue;
 
       matchText = matchText.replace(/['’]s$/i, '').replace(/[.,;:!?]+$/, '').trim();
+
+      if (rule.type === 'PERSON_NAME' && /\b(?:Bank|Microfinance\s+Bank|Ltd|Limited|Inc|Incorporated|PLC|Corp|Corporation|LLC|GmbH)\b/i.test(matchText)) {
+        continue;
+      }
 
       const words = matchText.split(/\s+/);
       if (words.length > 1 && DISALLOWED_COMMON_WORDS.has(words[words.length - 1].toLowerCase())) {

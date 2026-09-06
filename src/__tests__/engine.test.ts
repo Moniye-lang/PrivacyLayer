@@ -1210,4 +1210,67 @@ Escalation contact: Jessica Vance same person as Ticket #8821, reachable also at
     const revealed = await revealResponse({ sessionId: result.sessionId, aiResponse: result.protectedPrompt });
     expect(revealed.restoredResponse).toBe(ticketBatchInput);
   });
+
+  test('Issue 2: Structured Numeric IDs (NIN, BVN) vs Phone Numbers', async () => {
+    // 1. National Identification Number (11 digits) should be SSN_NATIONAL_ID, never PHONE_NUMBER
+    const ninInput = 'National Identification Number: 12345678901 and NIN: 98765432109';
+    const ninResult = await shieldPrompt({ prompt: ninInput });
+    expect(ninResult.protectedPrompt).toContain('[[SSN_NATIONAL_ID_001]]');
+    expect(ninResult.protectedPrompt).toContain('[[SSN_NATIONAL_ID_002]]');
+    expect(ninResult.protectedPrompt).not.toContain('PHONE');
+
+    // 2. Bank Verification Number (11 digits) should be BANK_ACCOUNT, never PHONE_NUMBER
+    const bvnInput = 'Bank Verification Number: 22233344455 and BVN: 55544433322';
+    const bvnResult = await shieldPrompt({ prompt: bvnInput });
+    expect(bvnResult.protectedPrompt).toContain('[[BANK_ACCOUNT_001]]');
+    expect(bvnResult.protectedPrompt).toContain('[[BANK_ACCOUNT_002]]');
+    expect(bvnResult.protectedPrompt).not.toContain('PHONE');
+
+    // 3. Raw 11-digit numbers without phone formatting or mobile prefixes must not be assumed to be PHONE_NUMBER
+    const rawDigitsInput = 'Transaction ref 12345678901 or order sequence 22233344455.';
+    const rawResult = await shieldPrompt({ prompt: rawDigitsInput });
+    expect(rawResult.protectedPrompt).not.toContain('PHONE');
+
+    // 4. Genuine phone numbers with formatting or context are correctly labeled as PHONE_NUMBER
+    const phoneInput = 'Customer Phone: 08012345678 or Mobile: +234 812 345 6789';
+    const phoneResult = await shieldPrompt({ prompt: phoneInput });
+    expect(phoneResult.protectedPrompt).toContain('[[PHONE_NUMBER_001]]');
+    expect(phoneResult.protectedPrompt).toContain('[[PHONE_NUMBER_002]]');
+
+    // 5. Lossless reveal round-trip
+    const ninRestored = await revealResponse({ sessionId: ninResult.sessionId, aiResponse: ninResult.protectedPrompt });
+    expect(ninRestored.restoredResponse).toBe(ninInput);
+
+    const bvnRestored = await revealResponse({ sessionId: bvnResult.sessionId, aiResponse: bvnResult.protectedPrompt });
+    expect(bvnRestored.restoredResponse).toBe(bvnInput);
+  });
+
+  test('Issue 3: Organization and Location Boundaries (Country header exclusion & Corporate suffixes)', async () => {
+    // 1. Country names in official document headers / titles (e.g. FEDERAL REPUBLIC OF NIGERIA) should not be masked as LOCATION
+    const headerInput = `FEDERAL REPUBLIC OF NIGERIA
+OFFICIAL GAZETTE
+Reference Number: GAZ-2026-09
+Official administrative document.`;
+    const headerResult = await shieldPrompt({ prompt: headerInput });
+    expect(headerResult.protectedPrompt).toContain('FEDERAL REPUBLIC OF NIGERIA');
+    expect(headerResult.protectedPrompt).not.toContain('LOCATION');
+
+    // 2. First Continental Bank should be recognized in its entirety as ORGANIZATION, not split into PERSON_NAME
+    const bankInput = 'Payment was processed through First Continental Bank for clearance.';
+    const bankResult = await shieldPrompt({ prompt: bankInput });
+    expect(bankResult.protectedPrompt).toContain('[[ORGANIZATION_001]]');
+    expect(bankResult.protectedPrompt).not.toContain('[[PERSON_NAME_');
+    expect(bankResult.protectedPrompt).not.toContain('Continental Bank');
+
+    // 3. Corporate suffixes (Bank, Ltd, Inc, PLC, Corp) recognized as ORGANIZATION
+    const corpInput = 'Audited by Apex Solutions Ltd and partner Zenith Bank PLC.';
+    const corpResult = await shieldPrompt({ prompt: corpInput });
+    expect(corpResult.protectedPrompt).toContain('[[ORGANIZATION_001]]');
+    expect(corpResult.protectedPrompt).toContain('[[ORGANIZATION_002]]');
+    expect(corpResult.protectedPrompt).not.toContain('PERSON');
+
+    // 4. Lossless reveal
+    const bankRestored = await revealResponse({ sessionId: bankResult.sessionId, aiResponse: bankResult.protectedPrompt });
+    expect(bankRestored.restoredResponse).toBe(bankInput);
+  });
 });

@@ -48,6 +48,8 @@ export async function renderShieldedImageCanvas(
         ctx.drawImage(img, 0, 0, width, height);
 
         // Extract original crop & render placeholders in native image resolution
+        const renderedPlaceholders = new Set<string>();
+
         for (const sel of selections) {
           // sel.rect is ALREADY in native image coordinates (0..width, 0..height)
           const x = Math.max(0, Math.min(width - 10, Math.round(sel.rect.x)));
@@ -77,8 +79,18 @@ export async function renderShieldedImageCanvas(
           ctx.lineWidth = 1;
           ctx.strokeRect(x + 0.5, y + 0.5, rectW - 1, rectH - 1);
 
+          // Line-wrapped secrets: render text only once in first box
+          const placeholderKey = sel.assignedPlaceholder;
+          if (renderedPlaceholders.has(placeholderKey)) {
+            continue;
+          }
+          renderedPlaceholders.add(placeholderKey);
+
           // 4. Calculate dynamic font size to fit placeholder text perfectly inside rectW
-          const text = sel.assignedPlaceholder;
+          let text = sel.assignedPlaceholder;
+          if (!text.startsWith('[[')) {
+            text = `[[${text.replace(/^\[*|\]*$/g, '')}]]`;
+          }
           const targetWidth = rectW * 0.92;
           let fontSize = Math.max(9, Math.min(14, Math.floor(rectH * 0.55)));
           ctx.font = `bold ${fontSize}px monospace`;
@@ -130,9 +142,19 @@ export async function renderShieldedImageCanvas(
  * Main Image Shielding Pipeline Engine
  */
 export async function shieldImage(
-  payload: ShieldImageRequestPayload
+  payloadOrImageDataUrl: ShieldImageRequestPayload | string,
+  selectionsArg?: ImageSelection[],
+  optionsArg?: any
 ): Promise<ShieldImageResponsePayload> {
   const startTimeMs = Date.now();
+  const payload: ShieldImageRequestPayload = typeof payloadOrImageDataUrl === 'string'
+    ? {
+        imageDataUrl: payloadOrImageDataUrl,
+        selections: selectionsArg || [],
+        ...(optionsArg || {}),
+      }
+    : payloadOrImageDataUrl;
+
   const { imageDataUrl, selections = [], ttlMinutes = 60 } = payload;
 
   if (!imageDataUrl || !imageDataUrl.trim()) {
@@ -152,10 +174,14 @@ export async function shieldImage(
   const valueToPlaceholderMap = new Map<string, string>();
 
   const selectionsWithPlaceholders = validSelections.map((sel) => {
-    if (sel.placeholder && sel.placeholder.startsWith('[[')) {
+    if (sel.placeholder && sel.placeholder.trim()) {
+      const trimmed = sel.placeholder.trim();
+      const bracketed = trimmed.startsWith('[[') && trimmed.endsWith(']]')
+        ? trimmed
+        : `[[${trimmed.replace(/^\[*|\]*$/g, '')}]]`;
       return {
         ...sel,
-        assignedPlaceholder: sel.placeholder,
+        assignedPlaceholder: bracketed,
       };
     }
 

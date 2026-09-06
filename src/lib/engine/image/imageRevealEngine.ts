@@ -58,7 +58,11 @@ export class ImageRevealEngine {
         restoredImageDataUrl = await this.restoreInBrowserCanvas(sourceImage, revealEntities, session);
         restoredCount = revealEntities.length;
         for (const ent of revealEntities) {
-          restoredEntities.push({ placeholder: ent.placeholder, rect: ent.rect });
+          const ph = (ent.placeholder || '').trim();
+          const normalizedPh = ph.startsWith('[[') && ph.endsWith(']]')
+            ? ph
+            : (ph ? `[[${ph.replace(/^\[*|\]*$/g, '')}]]` : '');
+          restoredEntities.push({ placeholder: normalizedPh, rect: ent.rect });
         }
       } else {
         // Node.js / Server Execution Path
@@ -102,7 +106,11 @@ export class ImageRevealEngine {
               pasteRgba(restoredBuffer, sourceWidth, sourceHeight, cropDecoded.data, ent.rect);
             }
             restoredCount++;
-            restoredEntities.push({ placeholder: ent.placeholder, rect: ent.rect });
+            const ph = (ent.placeholder || '').trim();
+            const normalizedPh = ph.startsWith('[[') && ph.endsWith(']]')
+              ? ph
+              : (ph ? `[[${ph.replace(/^\[*|\]*$/g, '')}]]` : '');
+            restoredEntities.push({ placeholder: normalizedPh, rect: ent.rect });
           }
 
           restoredImageDataUrl = encodePngDataUrl(restoredBuffer, sourceWidth, sourceHeight);
@@ -118,7 +126,11 @@ export class ImageRevealEngine {
           // Synthetic mock fallback for unit tests using dummy data URL strings
           restoredCount = revealEntities.length;
           for (const ent of revealEntities) {
-            restoredEntities.push({ placeholder: ent.placeholder, rect: ent.rect });
+            const ph = (ent.placeholder || '').trim();
+            const normalizedPh = ph.startsWith('[[') && ph.endsWith(']]')
+              ? ph
+              : (ph ? `[[${ph.replace(/^\[*|\]*$/g, '')}]]` : '');
+            restoredEntities.push({ placeholder: normalizedPh, rect: ent.rect });
           }
           restoredImageDataUrl = `data:image/png;base64,restored_image_${sessionId}_${restoredCount}_entities`;
         }

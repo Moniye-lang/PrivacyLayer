@@ -387,7 +387,7 @@ const SECRET_PATTERNS: SecretPatternRule[] = [
   {
     type: 'URL',
     name: 'Cloud DB Host Endpoint',
-    pattern: /(?:(?:db_host|database_host|rds_host|db_server|db_endpoint|host|server)\s*[:=]\s*["']?([a-zA-Z0-9_.-]+(?:\.[a-zA-Z0-9_.-]+)+)["']?|[a-zA-Z0-9_.-]+\.(?:[a-zA-Z0-9_.-]+\.)?(?:rds\.amazonaws\.com|database\.azure\.com|cloudsql\.google\.com|internal|local))/gi,
+    pattern: /(?:(?:db_host|database_host|rds_host|db_server|db_endpoint|host|server)\s*[:=]\s*["']?([a-zA-Z0-9_-]+(?:\.[a-zA-Z0-9_-]+)+)["']?|[a-zA-Z0-9_-]+(?:\.[a-zA-Z0-9_-]+)*\.(?:rds\.amazonaws\.com|database\.azure\.com|cloudsql\.google\.com|internal|local))/gi,
     reason: 'Context rule: Cloud Database Host Endpoint',
     confidence: 0.99,
     priority: MID_PRIO,

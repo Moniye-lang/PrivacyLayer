@@ -17,6 +17,9 @@ export function runStage3Syntactic(
 
     // 1. Title Case / Proper Noun Patterns (e.g., "Alexander Smith", "Falcon-X")
     if (/^[A-Z][a-z]{2,20}(?:\s+[A-Z][a-z]{2,20})?$/.test(rawSpan)) {
+      if (/\b(?:Bank|Microfinance|Ltd|Limited|Inc|Incorporated|PLC|Corp|Corporation|LLC|GmbH)\b/i.test(rawSpan)) {
+        continue;
+      }
       detected.push({
         id: `stg3_syn_${span.start}_${Math.random().toString(36).substring(2, 6)}`,
         type: 'PERSON_NAME',

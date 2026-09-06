@@ -10,7 +10,7 @@ export interface RegexPatternSpec {
 const REGEX_PATTERNS: RegexPatternSpec[] = [
   {
     type: 'EMAIL_ADDRESS',
-    regex: /\b[a-zA-Z0-9._%+-]+(?:\s*\.\s*[a-zA-Z0-9._%+-]+)*\s*(?:@|\[at\]|\(at\))\s*[a-zA-Z0-9-]+(?:\s*\.\s*(?:com|org|net|edu|gov|mil|io|ai|co|uk|de|fr|ca|au|ng|app|dev|me|info|biz|tv|cc|[a-z]{2,4}))(?:\s*\.\s*(?:uk|au|ca|de|fr|ng|br|za|jp|cn|in|[a-z]{2}))?\b/gi,
+    regex: /\b[a-zA-Z0-9_%+-]+(?:\s*\.\s*[a-zA-Z0-9_%+-]+)*\s*(?:@|\[at\]|\(at\))\s*[a-zA-Z0-9-]+(?:\s*\.\s*(?:com|org|net|edu|gov|mil|io|ai|co|uk|de|fr|ca|au|ng|app|dev|me|info|biz|tv|cc|[a-z]{2,4}))(?:\s*\.\s*(?:uk|au|ca|de|fr|ng|br|za|jp|cn|in|[a-z]{2}))?\b/gi,
     reason: 'Standard email address structure (OCR-resilient)',
     confidence: 0.98,
   },
@@ -40,8 +40,8 @@ const REGEX_PATTERNS: RegexPatternSpec[] = [
   },
   {
     type: 'URL',
-    regex: /\bhttps?:\/\/(?:[ \t]*[^\s<>'"]+)+/gi,
-    reason: 'Standard Web URL format (OCR-resilient)',
+    regex: /\bhttps?:\/\/[^\s<>'"]+/gi,
+    reason: 'Standard Web URL format',
     confidence: 0.85,
   },
   {
@@ -64,7 +64,7 @@ const REGEX_PATTERNS: RegexPatternSpec[] = [
   },
   {
     type: 'PHONE_NUMBER',
-    regex: /(?:\+\d{1,4}[-.\s]*)?(?:\(\d{1,4}\)[-.\s]*)?(?:[0-9]{2,4}[-.\s]?[0-9]{2,4}[-.\s]?[0-9]{2,4}(?:[-.\s]?[0-9]{2,5})?)\b|\+\d{1,4}(?:\([0-9]\))?[0-9]{8,12}\b|\b0[789]\d{8,9}\b/g,
+    regex: /(?:\+\d{1,4}[-.\s]+)?(?:\(\d{1,4}\)[-.\s]*)?(?:[0-9]{2,5}[-.\s]+[0-9]{2,5}(?:[-.\s]+[0-9]{2,5})?)\b|\+\d{1,4}(?:\([0-9]\))?[0-9]{7,12}\b|\b0[789][01]\d{8}\b/g,
     reason: 'Standard telephone number pattern',
     confidence: 0.88,
   },
@@ -131,6 +131,22 @@ export class RegexDetector implements Detector {
 
           // 7. Standalone basic numbers, counters, or percentages (under 7 digits)
           if (/^[\$€£₦]?\d{1,6}(?:\.\d+)?%?$/.test(trimmed)) {
+            continue;
+          }
+
+          // 8. Context Guard: If preceded by ID, Account, BVN, NIN, Invoice, or Serial labels, reject as PHONE_NUMBER
+          const precedingText = text.substring(Math.max(0, match.index - 60), match.index);
+          if (/(?:NIN|BVN|National\s+(?:Identification|Identity)(?:\s+Number)?|National\s+ID|Bank\s+Verification(?:\s+Number)?|Account(?:\s+Number)?|Order\s+ID|Ticket\s+ID|Serial(?:\s+Number)?|Tax\s+ID|SSN|Invoice\s+Number|Tracking\s+ID)\s*[:=]?\s*$/i.test(precedingText)) {
+            continue;
+          }
+
+          // 9. Formatting & Context Requirement: Require phone-like formatting (delimiters), country code prefix (+), recognized mobile prefix, or phone context
+          const hasInternationalPlus = trimmed.startsWith('+');
+          const hasFormattingDelimiters = /[\s\-\.\(\)]/.test(trimmed) && (trimmed.match(/\d+/g) || []).length >= 2;
+          const hasValidNigerianMobilePrefix = /^0[789][01]\d{8}$/.test(trimmed);
+          const hasPhoneContextPrecursor = /(?:Phone|Telephone|Tel|Mobile|Cell|Call|Contact|Hotline|WhatsApp|SMS|Fax|Reach\s+me\s+(?:on|at))\s*[:=]?\s*$/i.test(precedingText);
+
+          if (!hasInternationalPlus && !hasFormattingDelimiters && !hasValidNigerianMobilePrefix && !hasPhoneContextPrecursor) {
             continue;
           }
         }
