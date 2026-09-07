@@ -144,11 +144,16 @@ export function runStage2NER(text: string): DetectedEntity[] {
         if (type === 'LOCATION') {
           // Exclude country / state names appearing in official document headers / titles
           // (e.g., 'FEDERAL REPUBLIC OF NIGERIA', 'GOVERNMENT OF NIGERIA', 'REPUBLIC OF GHANA')
-          const precedingText = text.substring(Math.max(0, startIndex - 50), startIndex);
-          if (/(?:FEDERAL\s+REPUBLIC\s+OF|REPUBLIC\s+OF|GOVERNMENT\s+OF|KINGDOM\s+OF|COMMONWEALTH\s+OF|UNITED\s+STATES\s+OF|PEOPLE['’]?S\s+REPUBLIC\s+OF)\s*$/i.test(precedingText)) {
+          const precedingText = text.substring(Math.max(0, startIndex - 80), startIndex);
+          if (/(?:FEDERAL\s+REPUBLIC\s+OF|REPUBLIC\s+OF|GOVERNMENT\s+OF|KINGDOM\s+OF|COMMONWEALTH\s+OF|UNITED\s+STATES\s+OF|PEOPLE['’]?S\s+REPUBLIC\s+OF)[\s\S]{0,40}$/i.test(precedingText)) {
             continue;
           }
           if (/(?:FEDERAL\s+REPUBLIC\s+OF|REPUBLIC\s+OF|GOVERNMENT\s+OF|KINGDOM\s+OF)\s+[A-Z\s]+/i.test(currentLine)) {
+            continue;
+          }
+          // If in top header lines (e.g. first 350 chars) of an official identity card or slip, do not mask country name
+          const isTopHeader = startIndex < 350;
+          if (isTopHeader && /(?:FEDERAL\s+REPUBLIC|NATIONAL\s+IDENTITY|COMMISSION|SMART\s+CARD|OFFICIAL|GOVERNMENT)/i.test(text.substring(0, 350))) {
             continue;
           }
         }

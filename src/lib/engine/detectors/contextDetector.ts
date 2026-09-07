@@ -59,7 +59,7 @@ const CONTEXT_RULES: ContextPrecursorRule[] = [
   {
     type: 'PERSON_NAME',
     category: 'PII',
-    pattern: /(?<![-_])\b(?:CEO|CTO|CFO|COO|President|Director|VP|Manager|Lead|Engineer|Developer|Dr\.|Prof\.|Mr\.|Mrs\.|Ms\.|Founder|Co-founder|Partner|Chairperson|Architect|Consultant|Analyst|Specialist|Officer|Coordinator|Representative|Agent|Speaker|Presenter|Attendee|Assignee|Reporter|Author)\s+([A-Z\u00C0-\u024F\u1E00-\u1EFF][a-zA-Z\u00C0-\u024F\u1E00-\u1EFF]{1,20}(?:\s+[A-Z\u00C0-\u024F\u1E00-\u1EFF][a-zA-Z\u00C0-\u024F\u1E00-\u1EFF]{1,20})?)\b|\b(?:Customer|Client|Admin|Owner|Contact|Full\s+Name|First\s+Name|Last\s+Name|User|Username|Employee|Applicant|Candidate|Patient|Member|Account\s+Holder|Author|Recipient|Sender|Agent|Supervisor|Signed\s+by|(?<!\b(?:Project|Repo|Repository|Codebase|Database|DB|File|App|Application|Service|Table|Column|Field|Bucket|Secret|Key|Host|Server|Domain|Site)\s+)Name)(?:\s*(?:Name|Person|Holder|Details))?\s*[:=]\s*["']?([a-zA-Z0-9_\-\.\u00C0-\u024F\u1E00-\u1EFF]{2,30}(?:\s+[a-zA-Z0-9_\-\.\u00C0-\u024F\u1E00-\u1EFF]{1,30}){0,2})["']?\b/gi,
+    pattern: /(?<![-_])\b(?:CEO|CTO|CFO|COO|President|Director|VP|Manager|Lead|Engineer|Developer|Dr\.|Prof\.|Mr\.|Mrs\.|Ms\.|Founder|Co-founder|Partner|Chairperson|Architect|Consultant|Analyst|Specialist|Officer|Coordinator|Representative|Agent|Speaker|Presenter|Attendee|Assignee|Reporter|Author)\s+([A-Z\u00C0-\u024F\u1E00-\u1EFF][a-zA-Z\u00C0-\u024F\u1E00-\u1EFF]{1,20}(?:[^\S\r\n]+[A-Z\u00C0-\u024F\u1E00-\u1EFF][a-zA-Z\u00C0-\u024F\u1E00-\u1EFF]{1,20})?)\b|\b(?:Customer|Client|Admin|Owner|Contact|Full\s+Name|First\s+Name|Last\s+Name|User|Username|Employee|Applicant|Candidate|Patient|Member|Account\s+Holder|Author|Recipient|Sender|Agent|Supervisor|Signed\s+by|(?<!\b(?:Bank|Company|Org|Organization|Institution|University|School|College|Firm|Corporation|Agency|Business|Project|Repo|Repository|Codebase|Database|DB|File|App|Application|Service|Table|Column|Field|Bucket|Secret|Key|Host|Server|Domain|Site)\s+)Name)(?:\s*(?:Name|Person|Holder|Details))?\s*[:=]\s*["']?([a-zA-Z0-9_\-\.\u00C0-\u024F\u1E00-\u1EFF]{2,30}(?:[^\S\r\n]+[a-zA-Z0-9_\-\.\u00C0-\u024F\u1E00-\u1EFF]{1,30}){0,2})["']?\b/gi,
     groupIndex: 1,
     reason: 'Context Engine: Professional / Role precursor',
     confidence: 0.98,
@@ -68,7 +68,7 @@ const CONTEXT_RULES: ContextPrecursorRule[] = [
   {
     type: 'PERSON_NAME',
     category: 'PII',
-    pattern: /(?<![-_])\b(?:name|full_name|first_name|last_name|user|username|client|customer|patient|doctor|physician|contact|author|owner|admin|member|agent|caller|recipient|sender|subscriber|assignee|creator|handle|nickname|alias|identity)\s*[:=]\s*["']?([a-zA-Z0-9_\-\.\u00C0-\u024F\u1E00-\u1EFF]{2,40}(?:\s+[a-zA-Z0-9_\-\.\u00C0-\u024F\u1E00-\u1EFF]{1,40}){0,2})["']?/gi,
+    pattern: /(?<![-_])(?<!\b(?:Bank|Company|Org|Organization|Institution|University|School|College|Firm|Corporation|Agency|Business|Project|Repo|Repository|DB|Database|Table|Service|File|Bucket|Secret)\s+)\b(?:name|full_name|first_name|last_name|user|username|client|customer|patient|doctor|physician|contact|author|owner|admin|member|agent|caller|recipient|sender|subscriber|assignee|creator|handle|nickname|alias|identity)\s*[:=]\s*["']?([a-zA-Z0-9_\-\.\u00C0-\u024F\u1E00-\u1EFF]{2,40}(?:[^\S\r\n]+[a-zA-Z0-9_\-\.\u00C0-\u024F\u1E00-\u1EFF]{1,40}){0,2})["']?/gi,
     groupIndex: 1,
     reason: 'Context Engine: Identity label declaration (e.g. "name: [value]" / "user: [value]")',
     confidence: 0.99,
@@ -77,7 +77,7 @@ const CONTEXT_RULES: ContextPrecursorRule[] = [
   {
     type: 'PERSON_NAME',
     category: 'PII',
-    pattern: /(?<![-_])\b(?:managed\s+by|owned\s+by|assigned\s+to|created\s+by|supervised\s+by)\s+([A-Z\u00C0-\u024F\u1E00-\u1EFF][a-zA-Z\u00C0-\u024F\u1E00-\u1EFF]{1,20}(?:\s+[A-Z\u00C0-\u024F\u1E00-\u1EFF][a-zA-Z\u00C0-\u024F\u1E00-\u1EFF]{1,20})?)\b/g,
+    pattern: /(?<![-_])\b(?:managed\s+by|owned\s+by|assigned\s+to|created\s+by|supervised\s+by)\s+([A-Z\u00C0-\u024F\u1E00-\u1EFF][a-zA-Z\u00C0-\u024F\u1E00-\u1EFF]{1,20}(?:[^\S\r\n]+[A-Z\u00C0-\u024F\u1E00-\u1EFF][a-zA-Z\u00C0-\u024F\u1E00-\u1EFF]{1,20})?)\b/g,
     groupIndex: 1,
     reason: 'Context Engine: Ownership / Management precursor',
     confidence: 0.98,
@@ -91,11 +91,11 @@ const CONTEXT_RULES: ContextPrecursorRule[] = [
     reason: 'Context Engine: Email label precursor',
     confidence: 0.99,
   },
-  // 2d. Address Label Precursors
+  // 2d. Address Label Precursors (with multiline continuation support)
   {
     type: 'ADDRESS',
     category: 'PII',
-    pattern: /(?<![-_])\b(?:Address|Physical\s+Address|Street\s+Address|Billing\s+Address|Shipping\s+Address|Home\s+Address|Residential\s+Address|Office\s+Address)\s*[:=]\s*([^\n\r;]+)/gi,
+    pattern: /(?<![-_])\b(?:Address|Physical\s+Address|Street\s+Address|Billing\s+Address|Shipping\s+Address|Home\s+Address|Residential\s+Address|Office\s+Address)\s*[:=]\s*([^\n\r;]+(?:\r?\n[ \t]+[^\n\r;]+)?)/gi,
     groupIndex: 1,
     reason: 'Context Engine: Address label precursor',
     confidence: 0.98,
@@ -105,7 +105,7 @@ const CONTEXT_RULES: ContextPrecursorRule[] = [
   {
     type: 'PROJECT_CODENAME',
     category: 'CONTEXTUAL',
-    pattern: /(?<![-_])\b(?:(?:[Pp]roject|[Ii]nitiative|[Cc]odename|[Oo]peration|[Pp]rogram|[Cc]ampaign)\s+(?:[Nn]ame|[Cc]odename)\s*[:=]\s*([A-Z\u00C0-\u024F\u1E00-\u1EFF][a-zA-Z0-9_\-\u00C0-\u024F\u1E00-\u1EFF]{1,30}(?:\s+[A-Z\u00C0-\u024F\u1E00-\u1EFF][a-zA-Z0-9_\-\u00C0-\u024F\u1E00-\u1EFF]{1,30})?)|(?:[Pp]roject|[Ii]nitiative|[Cc]odename|[Oo]peration|[Pp]roduct|[Ff]eature|[Pp]latform|[Pp]ortal|[Ee]ngine|[Mm]odule|[Ss]ystem|[Pp]ipeline)\s*[:=]?\s*([A-Z\u00C0-\u024F\u1E00-\u1EFF][a-zA-Z0-9_\-\u00C0-\u024F\u1E00-\u1EFF]{2,30}))\b/g,
+    pattern: /(?<![-_])\b(?:(?:[Pp]roject|[Ii]nitiative|[Cc]odename|[Oo]peration|[Pp]rogram|[Cc]ampaign)\s+(?:[Nn]ame|[Cc]odename)\s*[:=]\s*([A-Z\u00C0-\u024F\u1E00-\u1EFF][a-zA-Z0-9_\-\u00C0-\u024F\u1E00-\u1EFF]{1,30}(?:[^\S\r\n]+[A-Z\u00C0-\u024F\u1E00-\u1EFF][a-zA-Z0-9_\-\u00C0-\u024F\u1E00-\u1EFF]{1,30})?)|(?:[Pp]roject|[Ii]nitiative|[Cc]odename|[Oo]peration|[Pp]roduct|[Ff]eature|[Pp]latform|[Pp]ortal|[Ee]ngine|[Mm]odule|[Ss]ystem|[Pp]ipeline)\s*[:=]?\s*([A-Z\u00C0-\u024F\u1E00-\u1EFF][a-zA-Z0-9_\-\u00C0-\u024F\u1E00-\u1EFF]{2,30}))\b/g,
     groupIndex: 1,
     reason: 'Context Engine: Project precursor',
     confidence: 0.98,
@@ -138,11 +138,21 @@ const CONTEXT_RULES: ContextPrecursorRule[] = [
     reason: 'Context Engine: Company/Organization precursor',
     confidence: 0.98,
   },
+  // 5a. Explicit Organization / Bank Name Precursor (e.g., "Bank Name: First Continental Bank", "Company: Acme Corp")
+  {
+    type: 'ORGANIZATION',
+    category: 'CONTEXTUAL',
+    pattern: /\b(?:Bank(?:\s+Name)?|Company(?:\s+Name)?|Organization(?:\s+Name)?|Org(?:\s+Name)?|Institution(?:\s+Name)?|Agency(?:\s+Name)?|Business(?:\s+Name)?|Employer(?:\s+Name)?|Firm(?:\s+Name)?)\s*[:=]\s*["']?([a-zA-Z0-9&.\'\-\u00C0-\u024F\u1E00-\u1EFF]{2,35}(?:[^\S\r\n]+[a-zA-Z0-9&.\'\-\u00C0-\u024F\u1E00-\u1EFF]{1,35}){0,4})["']?/gi,
+    groupIndex: 1,
+    reason: 'Context Engine: Organization / Bank name precursor',
+    confidence: 0.99,
+    priority: PriorityLevel.REGEX + 20, // 110 priority: higher than generic regex / ner
+  },
   // 5b. Corporate Organization & Bank Name Precursors / Suffixes (e.g. "First Continental Bank", "Continental Bank", "Acme Ltd", "Zenith Bank PLC")
   {
     type: 'ORGANIZATION',
     category: 'CONTEXTUAL',
-    pattern: /\b((?:First\s+|United\s+|Union\s+|Standard\s+|National\s+|Global\s+|Central\s+|Federal\s+|Apex\s+)?[A-Z\u00C0-\u024F][a-zA-Z0-9&.\'\-]{1,25}(?:\s+[A-Z\u00C0-\u024F][a-zA-Z0-9&.\'\-]{1,25}){0,3}\s+(?:Bank|Microfinance\s+Bank|Ltd|Limited|Inc|Incorporated|PLC|Corp|Corporation|LLC|GmbH))\b/g,
+    pattern: /\b((?:First\s+|United\s+|Union\s+|Standard\s+|National\s+|Global\s+|Central\s+|Federal\s+|Apex\s+)?[A-Z\u00C0-\u024F][a-zA-Z0-9&.\'\-]{1,25}(?:[^\S\r\n]+[A-Z\u00C0-\u024F][a-zA-Z0-9&.\'\-]{1,25}){0,3}[^\S\r\n]+(?:Bank|Microfinance\s+Bank|Ltd|Limited|Inc|Incorporated|PLC|Corp|Corporation|LLC|GmbH))\b/g,
     groupIndex: 1,
     reason: 'Context Engine: Corporate organization / bank name recognized by suffix',
     confidence: 0.98,
@@ -157,25 +167,25 @@ const CONTEXT_RULES: ContextPrecursorRule[] = [
     reason: 'Context Engine: Department precursor',
     confidence: 0.96,
   },
-  // 7a. National Identification Numbers (e.g. "National Identification Number: 12345678901", "NIN: 12345678901")
+  // 7a. National Identification Numbers (e.g. "National Identification Number: 12345678901", "National Identification Number (NIN): 1234 567 8901", "NIN: 12345678901")
   {
     type: 'SSN_NATIONAL_ID',
     category: 'PII',
-    pattern: /\b(?:National\s+Identification(?:\s+Number)?|National\s+Identity(?:\s+Number)?|National\s+ID(?:\s+Number)?|NIN(?:\s+Number)?|SSN|Social\s+Security(?:\s+Number)?|Passport(?:\s+Number)?|Driver['’]?s\s+License|Tax\s+ID|EIN|TIN)\s*[:=]\s*([A-Za-z0-9]{2,6}(?:[-\/][A-Za-z0-9]{2,6}){1,3}|\d{9,14}|[A-Za-z0-9]{6,16})\b/gi,
+    pattern: /\b(?:National\s+Identification(?:\s+Number)?(?:\s*\([A-Za-z]+\))?|National\s+Identity(?:\s+(?:Number|No\.?|#))?(?:\s*\([A-Za-z]+\))?|National\s+ID(?:\s+(?:Number|No\.?|#))?(?:\s*\([A-Za-z]+\))?|NIN(?:\s+(?:Number|No\.?|#))?|SSN|Social\s+Security(?:\s+Number)?|Passport(?:\s+(?:Number|No\.?|#))?|Driver['’]?s\s+License|Tax\s+ID|EIN|TIN)(?!\s*(?:Management|Commission|Authority|Ministry|Agency|Department|Card|Slip))\s*[:=\-]?\s*([0-9]{3,4}[\s\-]?[0-9]{3,4}[\s\-]?[0-9]{3,5}|\d{9,14}|(?=[A-Za-z0-9]*\d{2})[A-Za-z0-9]{6,16}|(?=[A-Za-z0-9\-\/]*\d)[A-Za-z0-9]{2,6}(?:[-\/][A-Za-z0-9]{2,6}){1,3})\b/gi,
     groupIndex: 1,
     reason: 'Context Engine: National ID / NIN / SSN precursor',
     confidence: 0.99,
-    priority: PriorityLevel.REGEX + 15, // 105 priority: higher than generic regex phone match
+    priority: PriorityLevel.REGEX + 20, // 110 priority: higher than generic regex phone match
   },
-  // 7b. Bank Verification Number (BVN) (11 digits, e.g. "BVN: 22233344455", "Bank Verification Number: 22233344455")
+  // 7b. Bank Verification Number (BVN) (11 digits, e.g. "BVN: 22233344455", "BVN: 222 333 444 55", "Bank Verification Number (BVN): ...")
   {
     type: 'BANK_ACCOUNT',
     category: 'PII',
-    pattern: /\b(?:Bank\s+Verification(?:\s+Number)?|BVN(?:\s+Number)?)\s*[:=]\s*(\d{11})\b/gi,
+    pattern: /\b(?:Bank\s+Verification(?:\s+Number)?(?:\s*\([A-Za-z]+\))?|BVN(?:\s+Number)?)\s*[:=\-]?\s*([0-9]{2,4}[\s\-]?[0-9]{2,4}[\s\-]?[0-9]{2,5}|\d{11})\b/gi,
     groupIndex: 1,
     reason: 'Context Engine: Bank Verification Number (BVN) precursor',
     confidence: 0.99,
-    priority: PriorityLevel.REGEX + 15, // 105 priority: higher than generic regex phone match
+    priority: PriorityLevel.REGEX + 20, // 110 priority: higher than generic regex phone match
   },
   // 7c. Phone Number Context Precursors (e.g. "Phone: 08012345678", "Tel: +234 812 345 6789", "Mobile: ...")
   {
@@ -187,14 +197,15 @@ const CONTEXT_RULES: ContextPrecursorRule[] = [
     confidence: 0.99,
     priority: PriorityLevel.REGEX + 10, // 100 priority
   },
-  // 8. Banking & Financial Identifiers
+  // 8. Banking & Financial Identifiers (Account Number / Routing / IBAN)
   {
-    type: 'IBAN',
-    category: 'PII',
-    pattern: /\b(?:Bank\s+Account(?:\s+Number)?|Routing\s+Number|Sort\s+Code|Account\s+Number|IBAN|SWIFT(?:\s+Code)?|BIC)\s*[:=]\s*([A-Za-z0-9\-\s]{5,34})\b/gi,
+    type: 'BANK_ACCOUNT',
+    category: 'FINANCIAL',
+    pattern: /\b(?:Bank\s+Account(?:\s+Number)?|Routing\s+Number|Sort\s+Code|Account\s+Number|IBAN|SWIFT(?:\s+Code)?|BIC)\s*[:=\-]?\s*([A-Za-z0-9\-][A-Za-z0-9\-[^\S\r\n]]{3,32}[A-Za-z0-9]|[A-Za-z0-9]{4,34})\b/gi,
     groupIndex: 1,
-    reason: 'Context Engine: Banking / IBAN precursor',
+    reason: 'Context Engine: Banking / Account Number precursor',
     confidence: 0.99,
+    priority: PriorityLevel.REGEX + 15, // 105 priority: higher than generic regex phone match
   },
   // 9. System User & Customer IDs
   {

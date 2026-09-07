@@ -93,14 +93,14 @@ export async function composeShieldedImageWithSvg(
           const fitHeightFont = Math.floor(rectH * 0.65);
 
           let text = fullText;
-          let fontSize = Math.max(10, Math.min(fitWidthFontFull, fitHeightFont));
+          let fontSize = Math.max(8, Math.min(fitWidthFontFull, fitHeightFont, 14));
 
-          // If font size for full text is below readable threshold (12px), switch to abbreviated form if it yields a larger readable size
-          if (fitWidthFontFull < 12) {
+          // If region is narrow (< 130px) or full text doesn't comfortably fit, use abbreviated form
+          if (rectW < 130 || fitWidthFontFull < 11) {
             const abbrevRatio = abbrevText.length * 0.62;
             const fitWidthFontAbbrev = Math.floor(rectW / Math.max(1, abbrevRatio));
-            const abbrevFontSize = Math.max(10, Math.min(fitWidthFontAbbrev, fitHeightFont));
-            if (abbrevFontSize > fontSize) {
+            const abbrevFontSize = Math.max(8, Math.min(fitWidthFontAbbrev, fitHeightFont, 14));
+            if (abbrevFontSize >= fontSize || rectW < 110) {
               text = abbrevText;
               fontSize = abbrevFontSize;
             }
@@ -113,15 +113,22 @@ export async function composeShieldedImageWithSvg(
 
           const textX = nativeX + rectW / 2;
           const textY = nativeY + rectH / 2;
+          const maxTextW = Math.max(10, rectW - 4);
+
+          pngCtx.save();
+          pngCtx.beginPath();
+          pngCtx.rect(nativeX, nativeY, rectW, rectH);
+          pngCtx.clip();
 
           pngCtx.font = `bold ${fontSize}px monospace`;
           pngCtx.fillStyle = '#00f0ff';
           pngCtx.textAlign = 'center';
           pngCtx.textBaseline = 'middle';
-          pngCtx.fillText(text, textX, textY);
+          pngCtx.fillText(text, textX, textY, maxTextW);
+          pngCtx.restore();
 
           svgElements.push(
-            `<text x="${textX}" y="${textY}" fill="#00f0ff" font-size="${fontSize}px" font-family="monospace" font-weight="bold" text-anchor="middle" dominant-baseline="central">${text}</text>`
+            `<text x="${textX}" y="${textY}" fill="#00f0ff" font-size="${fontSize}px" font-family="monospace" font-weight="bold" text-anchor="middle" dominant-baseline="central" textLength="${maxTextW}" lengthAdjust="spacingAndGlyphs">${text}</text>`
           );
         }
 

@@ -48,11 +48,11 @@ function validatePhoneNumber(phone: string, text?: string, startIndex?: number):
   if (digits < 7 || digits > 15) return false;
 
   const precedingText = (text && typeof startIndex === 'number')
-    ? text.substring(Math.max(0, startIndex - 60), startIndex)
+    ? text.substring(Math.max(0, startIndex - 80), startIndex)
     : '';
 
   // Context Guard: If preceded by ID, Account, BVN, NIN, Invoice, or Serial labels, reject as PHONE_NUMBER
-  if (precedingText && /(?:NIN|BVN|National\s+(?:Identification|Identity)(?:\s+Number)?|National\s+ID|Bank\s+Verification(?:\s+Number)?|Account(?:\s+Number)?|Order\s+ID|Ticket\s+ID|Serial(?:\s+Number)?|Tax\s+ID|SSN|Invoice\s+Number|Tracking\s+ID)\s*[:=]?\s*$/i.test(precedingText)) {
+  if (precedingText && /(?:NIN|BVN|National\s+(?:Identification|Identity|ID)(?:\s+Number)?(?:\s*\([A-Za-z]+\))?|Bank\s+Verification(?:\s+Number)?(?:\s*\([A-Za-z]+\))?|Account(?:\s+Number)?|Bank\s+Account(?:\s+Number)?|Order\s+ID|Ticket\s+ID|Serial(?:\s+Number)?|Tax\s+ID|SSN|Social\s+Security(?:\s+Number)?|Invoice\s+Number|Tracking\s+ID|Employee\s+ID|Customer\s+ID)\s*[:=\-]?\s*$/i.test(precedingText)) {
     return false;
   }
 

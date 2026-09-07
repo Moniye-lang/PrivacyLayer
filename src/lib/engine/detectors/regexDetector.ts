@@ -135,8 +135,8 @@ export class RegexDetector implements Detector {
           }
 
           // 8. Context Guard: If preceded by ID, Account, BVN, NIN, Invoice, or Serial labels, reject as PHONE_NUMBER
-          const precedingText = text.substring(Math.max(0, match.index - 60), match.index);
-          if (/(?:NIN|BVN|National\s+(?:Identification|Identity)(?:\s+Number)?|National\s+ID|Bank\s+Verification(?:\s+Number)?|Account(?:\s+Number)?|Order\s+ID|Ticket\s+ID|Serial(?:\s+Number)?|Tax\s+ID|SSN|Invoice\s+Number|Tracking\s+ID)\s*[:=]?\s*$/i.test(precedingText)) {
+          const precedingText = text.substring(Math.max(0, match.index - 80), match.index);
+          if (/(?:NIN|BVN|National\s+(?:Identification|Identity|ID)(?:\s+Number)?(?:\s*\([A-Za-z]+\))?|Bank\s+Verification(?:\s+Number)?(?:\s*\([A-Za-z]+\))?|Account(?:\s+Number)?|Bank\s+Account(?:\s+Number)?|Order\s+ID|Ticket\s+ID|Serial(?:\s+Number)?|Tax\s+ID|SSN|Social\s+Security(?:\s+Number)?|Invoice\s+Number|Tracking\s+ID|Employee\s+ID|Customer\s+ID)\s*[:=\-]?\s*$/i.test(precedingText)) {
             continue;
           }
 
