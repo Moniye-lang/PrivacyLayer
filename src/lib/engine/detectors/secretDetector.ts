@@ -670,6 +670,9 @@ export class SecretDetector implements Detector {
       } else if (/(?:\b(?:order[\s_-]*id|order[\s_-]*num|order|ticket[\s_-]*id|ticket|invoice|ref[\s_-]*id|ref|account[\s_-]*id|customer[\s_-]*id)\b|#ord|#tck|#ref)/i.test(precedingText) || /^#?(?:ORD|TCK|REF|INV)-/i.test(matchedToken)) {
         targetType = 'CUSTOM_TERM';
         evidence = 'Contextual Order / Reference ID';
+      } else if (/(?:\b(?:insurance[\s_-]*id|policy[\s_-]*(?:number|no|num|id)|license[\s_-]*(?:number|no|num|id)|national[\s_-]*id|voter[\s_-]*id|student[\s_-]*id|passport[\s_-]*(?:number|no|id)|ssn|nin)\b)/i.test(precedingText)) {
+        targetType = 'SSN_NATIONAL_ID';
+        evidence = 'Contextual ID / Policy Identifier';
       } else if (/(?:\b(?:db[\s_-]*host|database[\s_-]*host|host|server|domain|endpoint)\b)/i.test(precedingText) || matchedToken.includes('.rds.amazonaws.com') || matchedToken.includes('.internal')) {
         targetType = 'URL';
         evidence = 'Contextual Host / Endpoint';
