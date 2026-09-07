@@ -20,11 +20,21 @@ import {
   ZoomOut,
   Camera,
   Image as ImageIcon,
+  Sparkle,
+  X,
 } from 'lucide-react';
 import { EntityType, ImageRect, ImageSelection, ShieldImageResponsePayload } from '@/types';
 import { shieldImage } from '@/lib/engine/image/imageShieldEngine';
 import { imageRevealEngineInstance } from '@/lib/engine/image/imageRevealEngine';
-import { autoDetectImageSensitiveRegions } from '@/lib/engine/image/autoImageShieldClient';
+import {
+  autoDetectImageSensitiveRegions,
+  scanImageOcrAndEntities,
+  extractTextFromRegion,
+  findMatchingPhraseOccurrences,
+  type ExtractedWord,
+  type ExtractedTextRegion,
+} from '@/lib/engine/image/autoImageShieldClient';
+import { isSignificantOverlap } from '@/lib/engine/image/awareMasking';
 import { getImageGeometry, pointerToNativeCoords, nativeToDisplayStyle, getAbbreviatedPlaceholder } from '@/lib/engine/image/imageGeometry';
 
 const COMMON_ENTITY_TYPES: { type: EntityType; label: string; color: string }[] = [
@@ -136,6 +146,12 @@ export const ImageShieldEditor: React.FC = () => {
   const [isRevealing, setIsRevealing] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // 6. Aware Manual Masking State
+  const [isAwarePropagationEnabled, setIsAwarePropagationEnabled] = useState<boolean>(true);
+  const [propagationFeedback, setPropagationFeedback] = useState<{ text: string; count: number } | null>(null);
+  const ocrDataRef = useRef<{ words: ExtractedWord[]; regions: ExtractedTextRegion[]; fullText: string } | null>(null);
+  const ocrScanningPromiseRef = useRef<Promise<any> | null>(null);
+
   const containerRef = useRef<HTMLDivElement>(null);
   const imgRef = useRef<HTMLImageElement>(null);
 
@@ -179,6 +195,115 @@ export const ImageShieldEditor: React.FC = () => {
     return () => observer.disconnect();
   }, [sourceImageUrl, isImageLoaded, zoomLevel, isExpandedView]);
 
+  const ensureOcrDataCached = async (imageUrl: string) => {
+    if (ocrDataRef.current) return ocrDataRef.current;
+    if (ocrScanningPromiseRef.current) return ocrScanningPromiseRef.current;
+
+    const scanPromise = (async () => {
+      try {
+        const res = await scanImageOcrAndEntities(imageUrl);
+        ocrDataRef.current = {
+          words: res.ocrWords || [],
+          regions: res.ocrRegions || [],
+          fullText: res.ocrText || '',
+        };
+        return ocrDataRef.current;
+      } catch (e) {
+        console.warn('[Aware Masking] Background OCR caching failed:', e);
+        return null;
+      } finally {
+        ocrScanningPromiseRef.current = null;
+      }
+    })();
+
+    ocrScanningPromiseRef.current = scanPromise;
+    return scanPromise;
+  };
+
+  const propagateAwareMasking = async (
+    baseSelection: ImageSelection,
+    currentSelections: ImageSelection[],
+    imageUrl: string | null
+  ) => {
+    if (!isAwarePropagationEnabled || !imageUrl) return;
+
+    let ocrData = ocrDataRef.current;
+    if (!ocrData && ocrScanningPromiseRef.current) {
+      ocrData = await ocrScanningPromiseRef.current;
+    } else if (!ocrData) {
+      ocrData = await ensureOcrDataCached(imageUrl);
+    }
+
+    if (!ocrData || (!ocrData.words.length && !ocrData.regions.length)) {
+      return;
+    }
+
+    // 1. Identify text under the manual selection
+    let detectedText = extractTextFromRegion(baseSelection.rect, ocrData.words, ocrData.regions);
+    if (!detectedText || detectedText.trim().length < 2) {
+      if (baseSelection.customLabel && baseSelection.customLabel.trim().length >= 2) {
+        detectedText = baseSelection.customLabel.trim();
+      }
+    }
+
+    if (!detectedText || detectedText.trim().length < 2) {
+      return;
+    }
+
+    const natW = imageNaturalDim.width || 1000;
+    const natH = imageNaturalDim.height || 1000;
+
+    // 2. Find all matching occurrences across the document
+    const matchingRects = findMatchingPhraseOccurrences(
+      detectedText,
+      ocrData.words,
+      ocrData.regions,
+      natW,
+      natH,
+      baseSelection.rect
+    );
+
+    if (matchingRects.length === 0) return;
+
+    // 3. Filter out any rects that already intersect existing selections
+    const allExisting = [...currentSelections];
+    const newMatches: ImageSelection[] = [];
+
+    for (let i = 0; i < matchingRects.length; i++) {
+      const mRect = matchingRects[i];
+      const alreadyMasked = allExisting.some((s) => isSignificantOverlap(s.rect, mRect, 0.3));
+      if (!alreadyMasked) {
+        const matchSelection: ImageSelection = {
+          id: `aware_prop_${Date.now()}_${i}_${Math.random().toString(36).substring(2, 6)}`,
+          rect: mRect,
+          entityType: baseSelection.entityType,
+          customLabel: baseSelection.customLabel,
+          placeholder: baseSelection.placeholder, // Identical placeholder representation!
+          evidence: `Aware auto-propagated match for "${detectedText}"`,
+          priority: baseSelection.priority || 95,
+        };
+        newMatches.push(matchSelection);
+        allExisting.push(matchSelection);
+      }
+    }
+
+    if (newMatches.length > 0) {
+      setSelections((prev) => [...prev, ...newMatches]);
+      setPropagationFeedback({
+        text: detectedText,
+        count: newMatches.length,
+      });
+
+      if (typeof window !== 'undefined' && 'vibrate' in navigator) {
+        try { navigator.vibrate([10, 50, 10]); } catch {}
+      }
+
+      setTimeout(() => {
+        setPropagationFeedback((curr) => (curr?.text === detectedText ? null : curr));
+      }, 5000);
+    }
+  };
+
   const loadImageFromFile = (file: File) => {
     if (sourceImageUrl && sourceImageUrl.startsWith('blob:')) {
       URL.revokeObjectURL(sourceImageUrl);
@@ -195,6 +320,10 @@ export const ImageShieldEditor: React.FC = () => {
       setError(null);
       setIsImageLoaded(false);
       setZoomLevel(100);
+      ocrDataRef.current = null;
+      ocrScanningPromiseRef.current = null;
+      setPropagationFeedback(null);
+      ensureOcrDataCached(dataUrl);
     };
     reader.onerror = () => {
       setError('Failed to read image file');
@@ -217,6 +346,10 @@ export const ImageShieldEditor: React.FC = () => {
     setError(null);
     setIsImageLoaded(false);
     setZoomLevel(100);
+    ocrDataRef.current = null;
+    ocrScanningPromiseRef.current = null;
+    setPropagationFeedback(null);
+    ensureOcrDataCached(sampleUrl);
   };
 
   const handleDragOver = (e: React.DragEvent) => {
@@ -245,6 +378,9 @@ export const ImageShieldEditor: React.FC = () => {
       setImageNaturalDim({ width: natW, height: natH });
       setDisplayedDim({ width: imgRef.current.clientWidth, height: imgRef.current.clientHeight });
       setIsImageLoaded(true);
+      if (sourceImageUrl && !ocrDataRef.current && !ocrScanningPromiseRef.current) {
+        ensureOcrDataCached(sourceImageUrl);
+      }
     }
   };
 
@@ -346,7 +482,12 @@ export const ImageShieldEditor: React.FC = () => {
       priority: 100,
     };
 
-    setSelections((prev) => [...prev, newSelection]);
+    const committedSelections = [...selections, newSelection];
+    setSelections(committedSelections);
+
+    if (isAwarePropagationEnabled && sourceImageUrl) {
+      propagateAwareMasking(newSelection, committedSelections, sourceImageUrl);
+    }
 
     if (typeof window !== 'undefined' && 'vibrate' in navigator) {
       try { navigator.vibrate(15); } catch {}
@@ -394,7 +535,12 @@ displayWidth=${displayedDim.width}
 displayHeight=${displayedDim.height}
 `);
 
-    setSelections((prev) => [...prev, newSelection]);
+    const committedSelections = [...selections, newSelection];
+    setSelections(committedSelections);
+
+    if (isAwarePropagationEnabled && sourceImageUrl) {
+      propagateAwareMasking(newSelection, committedSelections, sourceImageUrl);
+    }
     setPendingRect(null);
     setCustomLabel('');
   };
@@ -423,6 +569,13 @@ displayHeight=${displayedDim.height}
         setError('No sensitive text regions detected in image.');
       } else {
         setSelections(autoSelections);
+        if ((autoSelections as any).ocrWords || (autoSelections as any).ocrRegions) {
+          ocrDataRef.current = {
+            words: (autoSelections as any).ocrWords || [],
+            regions: (autoSelections as any).ocrRegions || [],
+            fullText: (autoSelections as any).ocrText || '',
+          };
+        }
       }
     } catch (err: any) {
       const msg = err instanceof Error ? err.message : (typeof err === 'string' ? err : err?.message || err?.error || 'Failed to detect sensitive regions');
@@ -854,23 +1007,39 @@ displayHeight=${displayedDim.height}
 
               {/* Active Drawing Tool Category Palette */}
               <div className="flex flex-col space-y-2 pb-2.5 mb-2 border-b border-grey-850 font-mono text-[11px]">
-                <div className="flex items-center space-x-1.5 overflow-x-auto scrollbar-none">
-                  <span className="text-grey-400 font-bold shrink-0 text-[10px] uppercase tracking-wider pl-1">
-                    Active Tool:
-                  </span>
-                  {COMMON_ENTITY_TYPES.map((t) => (
-                    <button
-                      key={t.type}
-                      onClick={() => setSelectedType(t.type)}
-                      className={`px-2.5 py-1 rounded-lg border transition-all shrink-0 font-bold text-[11px] ${
-                        selectedType === t.type
-                          ? 'border-gold-500 bg-gold-500/20 text-gold-300 shadow-glow-gold scale-105'
-                          : 'border-grey-800 bg-grey-900/60 text-grey-400 hover:border-grey-700 hover:text-grey-200'
-                      }`}
-                    >
-                      {t.label}
-                    </button>
-                  ))}
+                <div className="flex items-center justify-between gap-2 overflow-x-auto scrollbar-none">
+                  <div className="flex items-center space-x-1.5 shrink-0">
+                    <span className="text-grey-400 font-bold shrink-0 text-[10px] uppercase tracking-wider pl-1">
+                      Active Tool:
+                    </span>
+                    {COMMON_ENTITY_TYPES.map((t) => (
+                      <button
+                        key={t.type}
+                        onClick={() => setSelectedType(t.type)}
+                        className={`px-2.5 py-1 rounded-lg border transition-all shrink-0 font-bold text-[11px] ${
+                          selectedType === t.type
+                            ? 'border-gold-500 bg-gold-500/20 text-gold-300 shadow-glow-gold scale-105'
+                            : 'border-grey-800 bg-grey-900/60 text-grey-400 hover:border-grey-700 hover:text-grey-200'
+                        }`}
+                      >
+                        {t.label}
+                      </button>
+                    ))}
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() => setIsAwarePropagationEnabled((v) => !v)}
+                    className={`flex items-center space-x-1.5 rounded-lg border px-2.5 py-1 text-xs font-mono transition-all shrink-0 ${
+                      isAwarePropagationEnabled
+                        ? 'border-indigo-500/50 bg-indigo-500/20 text-indigo-300 shadow-sm'
+                        : 'border-grey-800 bg-grey-900/80 text-grey-500 hover:text-grey-300'
+                    }`}
+                    title="Aware Manual Masking: When enabled, manually masking any text will automatically scan the document and mask all identical occurrences across the image."
+                  >
+                    <Sparkle className={`h-3.5 w-3.5 ${isAwarePropagationEnabled ? 'text-indigo-400 animate-pulse' : 'text-grey-500'}`} />
+                    <span>Aware Propagation: {isAwarePropagationEnabled ? 'ON' : 'OFF'}</span>
+                  </button>
                 </div>
 
                 {/* Inline Custom Label Input when CUSTOM is selected */}
@@ -889,6 +1058,25 @@ displayHeight=${displayedDim.height}
                         Preview: [[{customLabel.trim().toUpperCase().replace(/[^A-Z0-9_]/g, '_')}_001]]
                       </span>
                     )}
+                  </div>
+                )}
+
+                {/* Aware Manual Masking Feedback Notification */}
+                {propagationFeedback && (
+                  <div className="flex items-center justify-between gap-2 px-3 py-1.5 rounded-xl bg-indigo-950/80 border border-indigo-500/40 text-xs font-mono text-indigo-200 shadow-sm animate-in fade-in slide-in-from-top-1">
+                    <div className="flex items-center gap-2">
+                      <Sparkle className="h-3.5 w-3.5 text-indigo-400 shrink-0 animate-pulse" />
+                      <span>
+                        Aware Masking: Auto-redacted <strong className="text-white">{propagationFeedback.count}</strong> matching occurrence{propagationFeedback.count > 1 ? 's' : ''} of &ldquo;<span className="text-indigo-300 font-bold">{propagationFeedback.text}</span>&rdquo; across image
+                      </span>
+                    </div>
+                    <button
+                      onClick={() => setPropagationFeedback(null)}
+                      className="text-indigo-400 hover:text-white text-xs px-1"
+                      title="Dismiss notification"
+                    >
+                      <X className="h-3.5 w-3.5" />
+                    </button>
                   </div>
                 )}
               </div>

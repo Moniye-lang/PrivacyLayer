@@ -1,6 +1,26 @@
 import { ImageSelection } from '../../../types';
 import { parseSvgToRegions } from './svgParser';
 import { runMultiLayerDetectionPipeline } from '../multiLayerPipeline';
+import {
+  extractTextFromRegion,
+  findMatchingPhraseOccurrences,
+  type ExtractedWord,
+  type ExtractedTextRegion,
+} from './awareMasking';
+
+export {
+  extractTextFromRegion,
+  findMatchingPhraseOccurrences,
+  type ExtractedWord,
+  type ExtractedTextRegion,
+};
+
+export interface OcrDetectionResult {
+  selections: ImageSelection[];
+  ocrWords: ExtractedWord[];
+  ocrRegions: ExtractedTextRegion[];
+  ocrText: string;
+}
 
 /**
  * Helper to convert a browser blob: URL to a Base64 data URL
@@ -151,7 +171,7 @@ function parseBrowserPageData(pageData: any): { regions: BrowserRegion[]; allWor
 async function runBrowserOcrFallback(
   imageDataUrl: string,
   sampleTextFallback?: string
-): Promise<ImageSelection[]> {
+): Promise<OcrDetectionResult> {
   try {
     const { createWorker } = await import('tesseract.js');
     const worker = await createWorker('eng', 1);
@@ -223,12 +243,22 @@ async function runBrowserOcrFallback(
 
     const textToScan = sampleTextFallback || (fullOcrText.trim().length > 0 ? fullOcrText : ocrText);
     if (!textToScan || textToScan.trim().length === 0) {
-      return [];
+      return {
+        selections: [],
+        ocrWords: allWords,
+        ocrRegions: regions,
+        ocrText: fullOcrText,
+      };
     }
 
     const detectedEntities = await runMultiLayerDetectionPipeline(textToScan);
     if (!detectedEntities || detectedEntities.length === 0) {
-      return [];
+      return {
+        selections: [],
+        ocrWords: allWords,
+        ocrRegions: regions,
+        ocrText: fullOcrText,
+      };
     }
 
     const selections: ImageSelection[] = [];
@@ -345,23 +375,31 @@ async function runBrowserOcrFallback(
       globalIndex++;
     }
 
-    return selections;
+    return {
+      selections,
+      ocrWords: allWords,
+      ocrRegions: regions,
+      ocrText: fullOcrText,
+    };
   } catch (err) {
     console.warn('[Browser OCR Fallback Execution Error]:', err);
-    return [];
+    return {
+      selections: [],
+      ocrWords: [],
+      ocrRegions: [],
+      ocrText: '',
+    };
   }
 }
 
 /**
- * Hybrid Client-Side Auto-Detect Trigger.
- * 1. Instant client-side SVG fast path (<5ms)
- * 2. High-speed serverless OCR API with 30s timeout
- * 3. Resilient In-Browser WASM OCR fallback if server route is unavailable/restricted
+ * Performs full OCR and entity detection on an image, returning both sensitive selections
+ * and underlying OCR word/region coordinate tokens for aware manual masking propagation.
  */
-export async function autoDetectImageSensitiveRegions(
+export async function scanImageOcrAndEntities(
   imageDataUrl: string,
   sampleTextFallback?: string
-): Promise<ImageSelection[]> {
+): Promise<OcrDetectionResult> {
   let payloadUrl = imageDataUrl;
   if (imageDataUrl && imageDataUrl.startsWith('blob:')) {
     try {
@@ -378,10 +416,14 @@ export async function autoDetectImageSensitiveRegions(
       if (payloadUrl.includes('base64,')) {
         svgText = atob(payloadUrl.split('base64,')[1]);
       } else {
-        svgText = decodeURIComponent(payloadUrl.split('data:image/svg+xml,')[1] || payloadUrl.split('data:image/svg+xml;charset=utf-8,')[1] || payloadUrl);
+        svgText = decodeURIComponent(
+          payloadUrl.split('data:image/svg+xml,')[1] ||
+            payloadUrl.split('data:image/svg+xml;charset=utf-8,')[1] ||
+            payloadUrl
+        );
       }
 
-      const { regions } = parseSvgToRegions(svgText);
+      const { regions, allWords } = parseSvgToRegions(svgText);
       const fullText = regions.map((r) => r.text).join('\n');
       const pipelineEntities = await runMultiLayerDetectionPipeline(fullText);
 
@@ -404,7 +446,12 @@ export async function autoDetectImageSensitiveRegions(
         globalIndex++;
       }
 
-      if (selections.length > 0) return selections;
+      return {
+        selections,
+        ocrWords: allWords,
+        ocrRegions: regions,
+        ocrText: fullText,
+      };
     } catch (e) {
       console.warn('Client SVG fast-path fallback:', e);
     }
@@ -436,9 +483,13 @@ export async function autoDetectImageSensitiveRegions(
       throw new Error(data.error || `Server auto-detect returned status ${res.status}`);
     }
 
-    if (data.success && Array.isArray(data.selections) && data.selections.length > 0) {
+    if (data.success) {
+      let finalSelections: ImageSelection[] = Array.isArray(data.selections) ? data.selections : [];
+      let finalWords: ExtractedWord[] = Array.isArray(data.ocrWords) ? data.ocrWords : [];
+      let finalRegions: ExtractedTextRegion[] = Array.isArray(data.ocrRegions) ? data.ocrRegions : [];
+
       if (scaleFactor !== 1.0 && scaleFactor > 0) {
-        return data.selections.map((s: ImageSelection) => ({
+        finalSelections = finalSelections.map((s: ImageSelection) => ({
           ...s,
           rect: {
             x: Math.round(s.rect.x / scaleFactor),
@@ -447,22 +498,57 @@ export async function autoDetectImageSensitiveRegions(
             height: Math.round(s.rect.height / scaleFactor),
           },
         }));
+        finalWords = finalWords.map((w: ExtractedWord) => ({
+          ...w,
+          rect: {
+            x: Math.round(w.rect.x / scaleFactor),
+            y: Math.round(w.rect.y / scaleFactor),
+            width: Math.round(w.rect.width / scaleFactor),
+            height: Math.round(w.rect.height / scaleFactor),
+          },
+        }));
+        finalRegions = finalRegions.map((r: ExtractedTextRegion) => ({
+          ...r,
+          rect: {
+            x: Math.round(r.rect.x / scaleFactor),
+            y: Math.round(r.rect.y / scaleFactor),
+            width: Math.round(r.rect.width / scaleFactor),
+            height: Math.round(r.rect.height / scaleFactor),
+          },
+          words: (r.words || []).map((w: ExtractedWord) => ({
+            ...w,
+            rect: {
+              x: Math.round(w.rect.x / scaleFactor),
+              y: Math.round(w.rect.y / scaleFactor),
+              width: Math.round(w.rect.width / scaleFactor),
+              height: Math.round(w.rect.height / scaleFactor),
+            },
+          })),
+        }));
       }
-      return data.selections;
+
+      if (finalSelections.length > 0 || finalWords.length > 0) {
+        return {
+          selections: finalSelections,
+          ocrWords: finalWords,
+          ocrRegions: finalRegions,
+          ocrText: data.ocrText || '',
+        };
+      }
     }
 
     // If server returned 0 selections, try in-browser fallback
-    const browserSelections = await runBrowserOcrFallback(payloadUrl, sampleTextFallback);
-    return browserSelections;
+    const browserRes = await runBrowserOcrFallback(payloadUrl, sampleTextFallback);
+    return browserRes;
   } catch (e: any) {
     clearTimeout(timeoutId);
     console.warn('Server OCR failed or timed out, executing in-browser fallback...', e);
 
     // 3. Resilient In-Browser WASM OCR Fallback
     try {
-      const fallbackSelections = await runBrowserOcrFallback(payloadUrl, sampleTextFallback);
-      if (fallbackSelections.length > 0) {
-        return fallbackSelections;
+      const fallbackRes = await runBrowserOcrFallback(payloadUrl, sampleTextFallback);
+      if (fallbackRes.selections.length > 0 || fallbackRes.ocrWords.length > 0) {
+        return fallbackRes;
       }
     } catch (browserErr) {
       console.error('Browser OCR fallback failed:', browserErr);
@@ -474,4 +560,21 @@ export async function autoDetectImageSensitiveRegions(
     throw new Error(e?.message || 'Failed to auto-detect sensitive regions.');
   }
 }
+
+/**
+ * Hybrid Client-Side Auto-Detect Trigger.
+ * Retains 100% backward compatibility by returning ImageSelection[] with attached OCR metadata.
+ */
+export async function autoDetectImageSensitiveRegions(
+  imageDataUrl: string,
+  sampleTextFallback?: string
+): Promise<ImageSelection[]> {
+  const result = await scanImageOcrAndEntities(imageDataUrl, sampleTextFallback);
+  const selections = result.selections;
+  (selections as any).ocrWords = result.ocrWords;
+  (selections as any).ocrRegions = result.ocrRegions;
+  (selections as any).ocrText = result.ocrText;
+  return selections;
+}
+
 

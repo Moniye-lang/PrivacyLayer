@@ -24,6 +24,7 @@ export interface ExtractedTextRegion {
   confidence: number;
   words?: ExtractedWord[];
 }
+export { extractTextFromRegion, findMatchingPhraseOccurrences } from './awareMasking';
 
 /**
  * Parses TSV output from Tesseract into structured lines and words.
@@ -845,7 +846,13 @@ export async function autoDetectImageSensitiveRegionsServer(
       if (imageDataUrl.includes('base64,')) {
         svgString = Buffer.from(imageDataUrl.split('base64,')[1], 'base64').toString('utf-8');
       } else {
-        svgString = decodeURIComponent(imageDataUrl.split('data:image/svg+xml,')[1] || imageDataUrl.split('data:image/svg+xml;charset=utf-8,')[1] || '');
+        const commaIdx = imageDataUrl.indexOf(',');
+        const rawContent = commaIdx !== -1 ? imageDataUrl.slice(commaIdx + 1) : imageDataUrl;
+        try {
+          svgString = decodeURIComponent(rawContent);
+        } catch {
+          svgString = rawContent;
+        }
       }
       imageBuffer = Buffer.from(svgString, 'utf-8');
     } else if (imageDataUrl.includes('base64,')) {
@@ -893,6 +900,10 @@ export async function autoDetectImageSensitiveRegionsServer(
         }
         globalIndex++;
       }
+
+      (selections as any).ocrWords = allWords;
+      (selections as any).ocrRegions = regions;
+      (selections as any).ocrText = fullText;
 
       return selections;
     }
@@ -1149,6 +1160,10 @@ export async function autoDetectImageSensitiveRegionsServer(
     selections.forEach((s) => {
       console.log(`[SELECTION] ${s.placeholder} (${s.entityType}): x=${s.rect.x}, y=${s.rect.y}, w=${s.rect.width}, h=${s.rect.height} | ${s.evidence}`);
     });
+
+    (selections as any).ocrWords = allWords;
+    (selections as any).ocrRegions = regions;
+    (selections as any).ocrText = fullOcrText;
 
     return selections;
   } catch (err) {

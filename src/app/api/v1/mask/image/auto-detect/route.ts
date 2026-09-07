@@ -17,7 +17,13 @@ export async function POST(request: NextRequest) {
     const selections = await autoDetectImageSensitiveRegionsServer(imageDataUrl, sampleTextFallback);
 
     return NextResponse.json(
-      { success: true, selections },
+      {
+        success: true,
+        selections,
+        ocrWords: (selections as any).ocrWords || [],
+        ocrRegions: (selections as any).ocrRegions || [],
+        ocrText: (selections as any).ocrText || '',
+      },
       { status: 200, headers: getSecurityHeaders() }
     );
   } catch (err: any) {
