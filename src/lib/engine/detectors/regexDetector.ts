@@ -74,6 +74,36 @@ const REGEX_PATTERNS: RegexPatternSpec[] = [
     reason: 'Physical street address pattern',
     confidence: 0.8,
   },
+  {
+    type: 'IP_ADDRESS',
+    regex: /\b(?:[0-9A-Fa-f]{2}[:-]){5}[0-9A-Fa-f]{2}\b/g,
+    reason: 'Media Access Control (MAC) hardware address pattern',
+    confidence: 0.95,
+  },
+  {
+    type: 'SSN_NATIONAL_ID',
+    regex: /\b\d{2}-\d{6}-\d{6}-\d\b|\b(?:IMEI(?:\s*[:=]\s*|\s+))?(\d{15})\b/gi,
+    reason: 'Device International Mobile Equipment Identity (IMEI) pattern',
+    confidence: 0.95,
+  },
+  {
+    type: 'SSN_NATIONAL_ID',
+    regex: /\b(?:VIN(?:\s*[:=]\s*|\s+))?([A-HJ-NPR-Z0-9]{17})\b/gi,
+    reason: 'Vehicle Identification Number (VIN) pattern',
+    confidence: 0.95,
+  },
+  {
+    type: 'LOCATION',
+    regex: /\b[-+]?([1-8]?\d(?:\.\d{3,8})|90(?:\.0{3,8})?)\s*,\s*[-+]?(180(?:\.0{3,8})?|(?:1[0-7]\d|[1-9]?\d)(?:\.\d{3,8}))\b/g,
+    reason: 'GPS decimal coordinates pattern',
+    confidence: 0.92,
+  },
+  {
+    type: 'MEDICAL_RECORD',
+    regex: /\b(?:Blood\s+(?:Type|Group)\s*[:=]\s*)(?:A|B|AB|O)[+-]\b/gi,
+    reason: 'Blood Type / Group medical descriptor pattern',
+    confidence: 0.95,
+  },
 ];
 
 export class RegexDetector implements Detector {

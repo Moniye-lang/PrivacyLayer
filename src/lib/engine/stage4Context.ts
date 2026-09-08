@@ -1,4 +1,5 @@
 import { DetectedEntity, EntityCategory, EntityType } from '@/types';
+import { PERSONAL_DATA_CONTEXT_RULES } from './detectors/personalDataPrecursors';
 
 interface ContextPrecursorRule {
   type: EntityType;
@@ -7,7 +8,8 @@ interface ContextPrecursorRule {
   groupIndex: number;
   reason: string;
   confidence: number;
-  placeholderPrefix: string;
+  placeholderPrefix?: string;
+  priority?: number;
 }
 
 const STAGE4_CONTEXT_RULES: ContextPrecursorRule[] = [
@@ -141,6 +143,7 @@ const STAGE4_CONTEXT_RULES: ContextPrecursorRule[] = [
     confidence: 0.99,
     placeholderPrefix: 'BVN',
   },
+  ...PERSONAL_DATA_CONTEXT_RULES,
 ];
 
 const DISALLOWED_COMMON_WORDS = new Set([

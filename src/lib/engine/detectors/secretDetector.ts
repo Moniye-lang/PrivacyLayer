@@ -566,7 +566,8 @@ export class SecretDetector implements Detector {
                          (fullMatch.includes(`'${matchedSubstring}'`));
 
         if (!isQuoted) {
-          while (matchedSubstring.length > 3 && /[.,;:!?]$/.test(matchedSubstring)) {
+          const punctuationToTrim = isExplicitPasswordOrPinRule ? /[.,;:]$/ : /[.,;:!?]$/;
+          while (matchedSubstring.length > 3 && punctuationToTrim.test(matchedSubstring)) {
             matchedSubstring = matchedSubstring.slice(0, -1);
           }
         }
@@ -678,8 +679,10 @@ export class SecretDetector implements Detector {
         evidence = 'Contextual Host / Endpoint';
       } else {
         // Standalone mixed alphanumeric token without preceding context:
-        // Must be >= 6 characters and contain complex character set (uppercase/lowercase/numbers/special)
-        if (matchedToken.length >= 6 && (charsetScore >= 3 || /[!@#$%^&*()_+\-=\[\]{}|;:,.<>?/~`]/.test(matchedToken) || (/[a-z]/.test(matchedToken) && /[A-Z]/.test(matchedToken) && /[0-9]/.test(matchedToken)))) {
+        // Must be >= 6 characters and contain genuine high-entropy character mix (not just a single hyphen)
+        const hasSpecial = /[!@#$%^&*_+=\[\]{}|;:,.<>?/~`]/.test(matchedToken);
+        const hasUpperLowerDigit = /[a-z]/.test(matchedToken) && /[A-Z]/.test(matchedToken) && /[0-9]/.test(matchedToken);
+        if (matchedToken.length >= 6 && (hasSpecial || hasUpperLowerDigit) && !/^\d{1,4}-[A-Za-z]+$/.test(matchedToken) && !/^[A-Za-z]+-\d{1,4}$/.test(matchedToken)) {
           targetType = 'PASSWORD';
           evidence = 'Mixed Alphanumeric Secret (Standalone Password)';
         } else {

@@ -204,6 +204,46 @@ const STAGE1_RULES: RegexPatternRule[] = [
     reason: 'Password or Auth Secret pattern detected',
     confidence: 0.96,
   },
+  // 17. MAC Address
+  {
+    type: 'IP_ADDRESS',
+    category: 'PII',
+    pattern: /\b(?:[0-9A-Fa-f]{2}[:-]){5}[0-9A-Fa-f]{2}\b/g,
+    reason: 'Personal Information Detector: MAC Hardware Address detected',
+    confidence: 0.95,
+  },
+  // 18. Device IMEI Number
+  {
+    type: 'SSN_NATIONAL_ID',
+    category: 'IDENTIFIER',
+    pattern: /\b\d{2}-\d{6}-\d{6}-\d\b|\b(?:IMEI(?:\s*[:=]\s*|\s+))?(\d{15})\b/gi,
+    reason: 'Personal Information Detector: Device IMEI detected',
+    confidence: 0.95,
+  },
+  // 19. Vehicle Identification Number (VIN)
+  {
+    type: 'SSN_NATIONAL_ID',
+    category: 'IDENTIFIER',
+    pattern: /\b(?:VIN(?:\s*[:=]\s*|\s+))?([A-HJ-NPR-Z0-9]{17})\b/gi,
+    reason: 'Personal Information Detector: Vehicle Identification Number (VIN) detected',
+    confidence: 0.95,
+  },
+  // 20. GPS Coordinates
+  {
+    type: 'LOCATION',
+    category: 'CONTEXTUAL',
+    pattern: /\b[-+]?([1-8]?\d(?:\.\d{3,8})|90(?:\.0{3,8})?)\s*,\s*[-+]?(180(?:\.0{3,8})?|(?:1[0-7]\d|[1-9]?\d)(?:\.\d{3,8}))\b/g,
+    reason: 'Personal Information Detector: GPS Decimal Coordinates detected',
+    confidence: 0.92,
+  },
+  // 21. Blood Type
+  {
+    type: 'MEDICAL_RECORD',
+    category: 'MEDICAL',
+    pattern: /\b(?:Blood\s+(?:Type|Group)\s*[:=]\s*)(?:A|B|AB|O)[+-]\b/gi,
+    reason: 'Personal Information Detector: Blood Type / Group detected',
+    confidence: 0.95,
+  },
 ];
 
 export function runStage1Regex(text: string): DetectedEntity[] {

@@ -84,6 +84,14 @@ export async function runMultiLayerDetectionPipeline(
       span.entityType === 'PHONE_NUMBER' ||
       span.entityType === 'PROJECT_CODENAME' ||
       span.entityType === 'COMPANY_SECRET' ||
+      span.entityType === 'SSN_NATIONAL_ID' ||
+      span.entityType === 'PASSPORT_NUMBER' ||
+      span.entityType === 'EMPLOYEE_ID' ||
+      span.entityType === 'BANK_ACCOUNT' ||
+      span.entityType === 'CREDIT_CARD' ||
+      span.entityType === 'MEDICAL_RECORD' ||
+      span.entityType === 'LEGAL_REFERENCE' ||
+      span.entityType === 'CUSTOM_TERM' ||
       (span.entityType === 'PERSON_NAME' && val.includes(' '));
 
     if (shouldPropagate) {

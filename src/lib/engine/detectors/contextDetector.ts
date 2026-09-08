@@ -1,4 +1,5 @@
 import { CandidateDetection, Detector, DetectorContext, EntityCategory, EntityType, PriorityLevel } from '../../../types';
+import { PERSONAL_DATA_CONTEXT_RULES } from './personalDataPrecursors';
 
 interface ContextPrecursorRule {
   type: EntityType;
@@ -133,7 +134,7 @@ const CONTEXT_RULES: ContextPrecursorRule[] = [
   {
     type: 'ORGANIZATION',
     category: 'CONTEXTUAL',
-    pattern: /\b(?:company|startup|agency|firm|corp|inc|ltd)\s+([A-Z0-9_\-\.\s]{2,30}(?:Ltd|Inc|LLC|Corp|Co|GmbH|PLC)?)\b/gi,
+    pattern: /\b(?:company|startup|agency|firm|corp)[^\S\r\n]+([A-Z0-9_\-\.\s]{2,30}(?:Ltd|Inc|LLC|Corp|Co|GmbH|PLC)?)\b/gi,
     groupIndex: 1,
     reason: 'Context Engine: Company/Organization precursor',
     confidence: 0.98,
@@ -187,7 +188,7 @@ const CONTEXT_RULES: ContextPrecursorRule[] = [
     confidence: 0.99,
     priority: PriorityLevel.REGEX + 20, // 110 priority: higher than generic regex phone match
   },
-  // 7c. Phone Number Context Precursors (e.g. "Phone: 08012345678", "Tel: +234 812 345 6789", "Mobile: ...")
+  // 7d. Phone Number Context Precursors (e.g. "Phone: 08012345678", "Tel: +234 812 345 6789", "Mobile: ...")
   {
     type: 'PHONE_NUMBER',
     category: 'PII',
@@ -201,7 +202,7 @@ const CONTEXT_RULES: ContextPrecursorRule[] = [
   {
     type: 'BANK_ACCOUNT',
     category: 'FINANCIAL',
-    pattern: /\b(?:Bank\s+Account(?:\s+Number)?|Routing\s+Number|Sort\s+Code|Account\s+Number|Acct\s+No\.?|IBAN|SWIFT(?:\s+Code)?|BIC|Card\s+Number|Credit\s+Card(?:\s+Number)?|Debit\s+Card(?:\s+Number)?|CVV|CVC|Card\s+Verification(?:\s+Value)?)\s*[:=\-]?\s*([A-Za-z0-9\-][A-Za-z0-9\-[^\S\r\n]]{3,32}[A-Za-z0-9]|[A-Za-z0-9]{3,34})\b/gi,
+    pattern: /\b(?:Bank\s+Account(?:\s+Number)?|Routing\s+Number|Sort\s+Code|Account\s+Number|Acct\s+No\.?|IBAN|SWIFT(?:\s+Code)?|BIC|Card\s+Number|Credit\s+Card(?:\s+(?:Number|Information))?|Debit\s+Card(?:\s+(?:Number|Information))?|CVV|CVC|Card\s+Verification(?:\s+Value)?)\s*[:=\-]\s*([A-Za-z0-9\-][A-Za-z0-9\-[^\S\r\n]]{3,32}[A-Za-z0-9]|[A-Za-z0-9]{3,34})\b/gi,
     groupIndex: 1,
     reason: 'Context Engine: Banking / Financial Account precursor',
     confidence: 0.99,
@@ -216,6 +217,7 @@ const CONTEXT_RULES: ContextPrecursorRule[] = [
     reason: 'Context Engine: System Identifier precursor',
     confidence: 0.95,
   },
+  ...PERSONAL_DATA_CONTEXT_RULES,
 ];
 
 export class ContextDetector implements Detector {
@@ -279,14 +281,59 @@ export class ContextDetector implements Detector {
           if (/^(?:project|initiative|codename|campaign|product|app|application|feature)\b/i.test(lower)) {
             return 'PROJECT_CODENAME';
           }
-          if (/^(?:name|full\s+name|person|user|employee|author|lead|owner|candidate|contact\s+name)\b/i.test(lower)) {
+          if (/^(?:name|full\s+name|person|user|employee|author|lead|owner|candidate|contact\s+name|next\s+of\s+kin|spouse|children|guardian|emergency\s+contact|recommender|referee)\b/i.test(lower)) {
             return 'PERSON_NAME';
           }
           if (/^(?:repo|repository|codebase)\b/i.test(lower)) {
             return 'REPOSITORY';
           }
-          if (/^(?:secret|token|api\s*key|key|password)\b/i.test(lower)) {
+          if (/^(?:secret|token|api\s*key|key|password|passphrase|2fa|recovery\s+code)\b/i.test(lower)) {
             return 'COMPANY_SECRET';
+          }
+          if (/^(?:ssn|social\s+security|national\s+id|nin|passport|civil\s+id|state\s+id|voter\s+id|military\s+id|imei|vin|vehicle\s+registration|driver['’]?s\s+license)\b/i.test(lower)) {
+            return 'SSN_NATIONAL_ID';
+          }
+          if (/^(?:employee\s+id|staff\s+id|badge\s+number|customer\s+id|frequent\s+flyer)\b/i.test(lower)) {
+            return 'EMPLOYEE_ID';
+          }
+          if (/^(?:bank\s+account|routing\s+number|sort\s+code|iban|bvn)\b/i.test(lower)) {
+            return 'BANK_ACCOUNT';
+          }
+          if (/^(?:credit\s+card|card\s+number|debit\s+card|cvv|cvc)\b/i.test(lower)) {
+            return 'CREDIT_CARD';
+          }
+          if (/^(?:salary|wage|compensation|bonus|investment|portfolio|loan|mortgage|payment\s+history|billing|order\s+id|donation|tithe|zakat)\b/i.test(lower)) {
+            return 'FINANCIAL_METRIC';
+          }
+          if (/^(?:email|e-mail)\b/i.test(lower)) {
+            return 'EMAIL_ADDRESS';
+          }
+          if (/^(?:phone|telephone|tel|mobile|cell|fax)\b/i.test(lower)) {
+            return 'PHONE_NUMBER';
+          }
+          if (/^(?:address|home\s+address|work\s+address|residential\s+address|street)\b/i.test(lower)) {
+            return 'ADDRESS';
+          }
+          if (/^(?:medical|prescription|medication|dosage|blood\s+type|blood\s+group|immunisation|immunization|allergy|allergies|diagnosis|therapy)\b/i.test(lower)) {
+            return 'MEDICAL_RECORD';
+          }
+          if (/^(?:criminal|court|case\s+number|arrest|offence|offense|docket|property\s+deed|deed|power\s+of\s+attorney)\b/i.test(lower)) {
+            return 'LEGAL_REFERENCE';
+          }
+          if (/^(?:gps|coordinates|latitude|longitude|itinerary|location\s+history|check-in|wifi|ssid)\b/i.test(lower)) {
+            return 'LOCATION';
+          }
+          if (/^(?:ip\s+address|mac\s+address)\b/i.test(lower)) {
+            return 'IP_ADDRESS';
+          }
+          if (/^(?:website|homepage|url|domain)\b/i.test(lower)) {
+            return 'URL';
+          }
+          if (/^(?:company|organization|org|bank|employer|institution|hospital|university|school|church|union|association|club)\b/i.test(lower)) {
+            return 'ORGANIZATION';
+          }
+          if (/^(?:job\s+title|degree|transcript|gpa|test\s+score|fingerprint|retina|dna|political|religion|marital\s+status|sexual\s+orientation|ethnicity|hobby|dietary)\b/i.test(lower)) {
+            return 'CUSTOM_TERM';
           }
           return null;
         });
@@ -339,7 +386,7 @@ export class ContextDetector implements Detector {
       let match: RegExpExecArray | null;
 
       while ((match = rule.pattern.exec(text)) !== null) {
-        let matchText = match[rule.groupIndex] || match[1] || match[2] || match[0];
+        let matchText = (match[rule.groupIndex] || match[1] || match[2] || match[0]).trim();
         if (!matchText || matchText.length < 2) continue;
 
         // Trim possessive 's or trailing punctuation from person / project / repo names
