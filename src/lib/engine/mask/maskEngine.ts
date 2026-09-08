@@ -73,7 +73,7 @@ export class MaskEngine {
     startTimeMs: number,
     candidatesCount?: number
   ): MaskEngineResult {
-    const typeCounters: Map<EntityType, number> = new Map();
+    const typeCounters: Map<string, number> = new Map();
     const valuePlaceholderCache: Map<string, string> = new Map();
     const plaintextMappings: Record<string, string> = {};
     const detectedEntities: MaskEngineResult['detectedEntities'] = [];
@@ -203,16 +203,17 @@ export class MaskEngine {
 
       // Canonical value mapping: exact string value -> single unified placeholder
       const canonicalType = canonicalValueTypeMap.get(cleanKey) || span.entityType;
+      const typeKey = (span.placeholderPrefix || canonicalType).toUpperCase();
       let placeholder = valuePlaceholderCache.get(cleanKey);
 
       if (!placeholder) {
-        // Increment 1-based counter for canonical entity type
-        const currentCount = (typeCounters.get(canonicalType) || 0) + 1;
-        typeCounters.set(canonicalType, currentCount);
+        // Increment 1-based counter for canonical entity type or custom prefix
+        const currentCount = (typeCounters.get(typeKey) || 0) + 1;
+        typeCounters.set(typeKey, currentCount);
 
-        // Format placeholder [[CANONICAL_TYPE_001]]
+        // Format placeholder [[TYPE_KEY_001]]
         const indexStr = String(currentCount).padStart(3, '0');
-        placeholder = `[[${canonicalType}_${indexStr}]]`;
+        placeholder = `[[${typeKey}_${indexStr}]]`;
         valuePlaceholderCache.set(cleanKey, placeholder);
       }
 

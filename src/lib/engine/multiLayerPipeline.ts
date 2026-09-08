@@ -130,7 +130,10 @@ export async function runMultiLayerDetectionPipeline(
     end: span.end,
     confidence: span.confidence,
     reason: span.evidence,
-    placeholder: `[[${span.entityType}_001]]`,
+    placeholderPrefix: span.placeholderPrefix,
+    placeholder: span.placeholderPrefix
+      ? `[[${span.placeholderPrefix}_001]]`
+      : `[[${span.entityType}_001]]`,
     votes: span.contributingDetections?.map((d) => ({
       stage: d.detectorId.includes('secret')
         ? 'SECRET'

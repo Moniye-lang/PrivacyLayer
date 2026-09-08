@@ -274,7 +274,7 @@ async function runBrowserOcrFallback(
 
       const normalizedValue = entityText.toLowerCase();
       let placeholder = valueToPlaceholderMap.get(normalizedValue);
-      const typeKey = entity.type.toUpperCase();
+      const typeKey = (entity.placeholderPrefix || entity.type).toUpperCase();
 
       if (!placeholder) {
         typeCounters[typeKey] = (typeCounters[typeKey] || 0) + 1;

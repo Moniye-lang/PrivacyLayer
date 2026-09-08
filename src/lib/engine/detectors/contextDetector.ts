@@ -47,13 +47,22 @@ const CONTEXT_RULES: ContextPrecursorRule[] = [
     reason: 'Context Engine: Action verb precursor',
     confidence: 0.98,
   },
-  // 1b. Self-Identification & General Introductions: "my name is Jeff", "my name is jeff", "I am Jeff", "call me Jeff", "this is Jeff"
+  // 1b. Self-Identification & General Introductions: "my name is Jeff", "my name is jeff", "I am Jeff", "call me Jeff"
   {
     type: 'PERSON_NAME',
     category: 'PII',
-    pattern: /(?<![-_])\b(?:my\s+name\s+(?:is|'s)|i\s+am|i'm|call\s+me|myself|this\s+is|regards,?\s*|sincerely,?\s*)\s+([a-zA-Z\u00C0-\u024F\u1E00-\u1EFF]{2,20}(?:[ \t]+[A-Z\u00C0-\u024F\u1E00-\u1EFF][a-zA-Z\u00C0-\u024F\u1E00-\u1EFF]{1,20})?)\b/gi,
+    pattern: /(?<![-_])\b(?:my\s+name\s+(?:is|'s)|i\s+am|i'm|call\s+me|myself|regards,?\s*|sincerely,?\s*)\s+([a-zA-Z\u00C0-\u024F\u1E00-\u1EFF]{2,20}(?:[ \t]+[A-Z\u00C0-\u024F\u1E00-\u1EFF][a-zA-Z\u00C0-\u024F\u1E00-\u1EFF]{1,20})?)\b/gi,
     groupIndex: 1,
     reason: 'Context Engine: Self-identification precursor',
+    confidence: 0.98,
+  },
+  // 1c. "This is [Name]" requires capitalized proper noun
+  {
+    type: 'PERSON_NAME',
+    category: 'PII',
+    pattern: /(?<![-_])\b(?:this\s+is)\s+([A-Z\u00C0-\u024F\u1E00-\u1EFF][a-zA-Z\u00C0-\u024F\u1E00-\u1EFF]{1,20}(?:[ \t]+[A-Z\u00C0-\u024F\u1E00-\u1EFF][a-zA-Z\u00C0-\u024F\u1E00-\u1EFF]{1,20})?)\b/g,
+    groupIndex: 1,
+    reason: 'Context Engine: Self-identification precursor ("this is [Name]")',
     confidence: 0.98,
   },
   // 2. Executive / Job Title / Form Field / Role Precursors
@@ -220,6 +229,118 @@ const CONTEXT_RULES: ContextPrecursorRule[] = [
   ...PERSONAL_DATA_CONTEXT_RULES,
 ];
 
+/**
+ * Classifies any field label before a colon (or table column header) into an EntityType
+ * and generates a clean placeholder prefix named directly from what is before the colon/column.
+ */
+export function classifyFieldLabel(label: string): { entityType: EntityType; placeholderPrefix?: string } {
+  const lower = label.toLowerCase().trim();
+  const cleanPrefix = label
+    .toUpperCase()
+    .replace(/[^A-Z0-9]+/g, '_')
+    .replace(/^_+|_+$/g, '')
+    .substring(0, 26);
+
+  // 1. Account Holder / Cardholder / Policyholder / Beneficiary / Payee -> PERSON_NAME
+  if (/(?:holder|cardholder|account\s*holder|policyholder|beneficiary|payee)/i.test(lower)) {
+    return { entityType: 'PERSON_NAME', placeholderPrefix: undefined };
+  }
+
+  // 2. Project / Codename (checked before name so 'Project Name' is recognized as PROJECT_CODENAME)
+  if (/(?:project|initiative|codename|operation|campaign)/i.test(lower)) {
+    return { entityType: 'PROJECT_CODENAME', placeholderPrefix: undefined };
+  }
+
+  // 3. Personal Names & Direct Roles
+  if (/(?:signed\s*by|name|full\s*name|first\s*name|last\s*name|surname|contact\s*name|author|owner|admin|user|username|client|customer|patient|doctor|physician|officer|agent|assignee|candidate|applicant)/i.test(lower)) {
+    return { entityType: 'PERSON_NAME', placeholderPrefix: undefined };
+  }
+  if (/(?:relationship|relation|kinship)/i.test(lower)) {
+    return { entityType: 'CUSTOM_TERM', placeholderPrefix: cleanPrefix || 'RELATIONSHIP' };
+  }
+  if (/(?:next\s*of\s*kin|emergency\s*contact|guardian|spouse|parent|father|mother|witness|referee)/i.test(lower)) {
+    return { entityType: 'PERSON_NAME', placeholderPrefix: cleanPrefix || 'PERSON_NAME' };
+  }
+
+  // 4. Identity & Official Numbers
+  // Specific document types get dynamic label prefix (e.g. DRIVING_LICENCE_NUMBER, NATIONAL_INSURANCE_NO, VOTER_CARD_ID, PASSPORT_NUMBER)
+  if (/(?:driving|driver|licen[sc]e|national\s*insurance|voter|passport|civil\s*id|state\s*id|alien\s*reg|tax\s*id|pan\s*card|aadhaar)/i.test(lower)) {
+    return { entityType: 'SSN_NATIONAL_ID', placeholderPrefix: cleanPrefix || 'ID' };
+  }
+  // Generic national ID / SSN returns standard SSN_NATIONAL_ID
+  if (/(?:national\s*id|ssn|social\s*security|national\s*identification|\bnin\b|\bbvn\b|ein\b|tin\b)/i.test(lower)) {
+    return { entityType: 'SSN_NATIONAL_ID', placeholderPrefix: undefined };
+  }
+
+  // 5. Contact Info (Email, Phone)
+  if (/(?:email|e-mail|mail)/i.test(lower)) {
+    return { entityType: 'EMAIL_ADDRESS', placeholderPrefix: undefined };
+  }
+  if (/(?:phone|telephone|mobile|cell|fax|whatsapp|tel\b|hotline)/i.test(lower)) {
+    return { entityType: 'PHONE_NUMBER', placeholderPrefix: undefined };
+  }
+
+  // 6. Physical Addresses
+  if (/(?:address|street|home\s*address|work\s*address|residential|residence|domicile|billing\s*address|shipping\s*address)/i.test(lower)) {
+    return { entityType: 'ADDRESS', placeholderPrefix: undefined };
+  }
+
+  // 7. Locations & Geography (City, Region, District, Branch Office, Processing Region, etc.)
+  if (/(?:city|town|region|processing\s*region|province|state|county|district|postcode|postal\s*code|zip|zipcode|location|geolocation|country|territory|branch|branch\s*office)/i.test(lower)) {
+    return { entityType: 'LOCATION', placeholderPrefix: cleanPrefix || 'LOCATION' };
+  }
+
+  // 8. Legal & Court Records, Endorsements, Points, Offences
+  if (/(?:court|magistrate|tribunal|docket|case\s*number|lawsuit|offen[sc]e|endorsement|penalty|points|conviction|citation|violation|plea|verdict|sentence|deed|power\s*of\s*attorney)/i.test(lower)) {
+    return { entityType: 'LEGAL_REFERENCE', placeholderPrefix: cleanPrefix || 'LEGAL' };
+  }
+
+  // 9. Dates
+  if (/(?:date|dob|birth|issued|issue\s*date|expiry|expir|valid\s*until|valid\s*from|timestamp|admitted|discharged)/i.test(lower)) {
+    return { entityType: 'DATE', placeholderPrefix: undefined };
+  }
+
+  // 10. Financial & Accounts
+  if (/(?:card|credit\s*card|debit|cvv)/i.test(lower)) {
+    return { entityType: 'CREDIT_CARD', placeholderPrefix: undefined };
+  }
+  if (/(?:bank|account|acct|iban|sort\s*code|routing)/i.test(lower)) {
+    return { entityType: 'BANK_ACCOUNT', placeholderPrefix: undefined };
+  }
+  if (/(?:salary|wage|balance|income|loan|mortgage|payment|fee|revenue)/i.test(lower)) {
+    return { entityType: 'FINANCIAL_METRIC', placeholderPrefix: cleanPrefix || 'FINANCIAL' };
+  }
+
+  // 11. Secrets, Keys & Tokens
+  if (/(?:password|passphrase|pwd|passcode)/i.test(lower)) {
+    return { entityType: 'PASSWORD', placeholderPrefix: undefined };
+  }
+  if (/(?:token|api\s*key|access\s*key|session\s*token)/i.test(lower)) {
+    return { entityType: 'API_KEY', placeholderPrefix: undefined };
+  }
+  if (/(?:secret|credential|auth)/i.test(lower)) {
+    return { entityType: 'COMPANY_SECRET', placeholderPrefix: undefined };
+  }
+
+  // 12. Health & Medical
+  if (/(?:medical|prescription|rx|drug|diagnosis|condition|allergy|blood|doctor|physician|hospital|clinic|vaccin|immuniz)/i.test(lower)) {
+    return { entityType: 'MEDICAL_RECORD', placeholderPrefix: cleanPrefix || 'MEDICAL' };
+  }
+
+  // 13. Organization & Employer
+  if (/(?:organization|organisation|company|employer|agency|department|ministry|institution|authority|firm|board)/i.test(lower)) {
+    return { entityType: 'ORGANIZATION', placeholderPrefix: cleanPrefix || 'ORG' };
+  }
+
+  // 14. Customer / Employee / Reference IDs
+  if (/(?:employee\s*id|staff\s*id|badge|customer\s*id|client\s*id|member\s*id|user\s*id|account\s*id|ref\s*id|reference|case\s*reference|serial|tracking|order\s*id|ticket)/i.test(lower)) {
+    return { entityType: 'CUSTOMER_ID', placeholderPrefix: cleanPrefix || 'CUST_ID' };
+  }
+
+  // 15. General fallback: Any other field label names the placeholder dynamically by what is before the colon
+  return { entityType: 'CUSTOM_TERM', placeholderPrefix: cleanPrefix || 'TERM' };
+}
+
 export class ContextDetector implements Detector {
   public readonly id = 'context-detector';
   public readonly name = 'Context Precursor Detector';
@@ -234,7 +355,7 @@ export class ContextDetector implements Detector {
       const line = headerLines[lineIdx].trim();
       if (!line || line.length < 3 || line.length > 50) continue;
       // Must not be a section title, official state header, or corporate/bank name
-      if (/^(?:PROFESSIONAL\s+SUMMARY|WORK\s+EXPERIENCE|EXPERIENCE|EDUCATION|SKILLS|CURRICULUM\s+VITAE|RESUME|COVER\s+LETTER|HANDOFF\s+NOTES|NOTES|ADVERSARIAL\s+PRIVACY|FEDERAL\s+REPUBLIC|REPUBLIC\s+OF|GOVERNMENT\s+OF)\b/i.test(line)) {
+      if (/^(?:FORM\s+SUBMISSION|FORM|APPLICATION|DOCUMENT|RECORD|PROFESSIONAL\s+SUMMARY|WORK\s+EXPERIENCE|EXPERIENCE|EDUCATION|SKILLS|CURRICULUM\s+VITAE|RESUME|COVER\s+LETTER|HANDOFF\s+NOTES|NOTES|ADVERSARIAL\s+PRIVACY|FEDERAL\s+REPUBLIC|REPUBLIC\s+OF|GOVERNMENT\s+OF)\b/i.test(line)) {
         break;
       }
       if (/\b(?:Bank|Microfinance|Ltd|Limited|Inc|Incorporated|PLC|Corp|Corporation|LLC|GmbH)\b/i.test(line)) {
@@ -276,67 +397,7 @@ export class ContextDetector implements Detector {
       // Check if this line is a markdown table header followed by a delimiter (|---|---|)
       if (headerLine.includes('|') && /^\s*\|?\s*[-:]+[-| :]*\|?\s*$/.test(sepLine)) {
         const headerCells = headerLine.split('|').map(c => c.trim()).filter(c => c.length > 0);
-        const colTypes: (EntityType | null)[] = headerCells.map(h => {
-          const lower = h.toLowerCase();
-          if (/^(?:project|initiative|codename|campaign|product|app|application|feature)\b/i.test(lower)) {
-            return 'PROJECT_CODENAME';
-          }
-          if (/^(?:name|full\s+name|person|user|employee|author|lead|owner|candidate|contact\s+name|next\s+of\s+kin|spouse|children|guardian|emergency\s+contact|recommender|referee)\b/i.test(lower)) {
-            return 'PERSON_NAME';
-          }
-          if (/^(?:repo|repository|codebase)\b/i.test(lower)) {
-            return 'REPOSITORY';
-          }
-          if (/^(?:secret|token|api\s*key|key|password|passphrase|2fa|recovery\s+code)\b/i.test(lower)) {
-            return 'COMPANY_SECRET';
-          }
-          if (/^(?:ssn|social\s+security|national\s+id|nin|passport|civil\s+id|state\s+id|voter\s+id|military\s+id|imei|vin|vehicle\s+registration|driver['’]?s\s+license)\b/i.test(lower)) {
-            return 'SSN_NATIONAL_ID';
-          }
-          if (/^(?:employee\s+id|staff\s+id|badge\s+number|customer\s+id|frequent\s+flyer)\b/i.test(lower)) {
-            return 'EMPLOYEE_ID';
-          }
-          if (/^(?:bank\s+account|routing\s+number|sort\s+code|iban|bvn)\b/i.test(lower)) {
-            return 'BANK_ACCOUNT';
-          }
-          if (/^(?:credit\s+card|card\s+number|debit\s+card|cvv|cvc)\b/i.test(lower)) {
-            return 'CREDIT_CARD';
-          }
-          if (/^(?:salary|wage|compensation|bonus|investment|portfolio|loan|mortgage|payment\s+history|billing|order\s+id|donation|tithe|zakat)\b/i.test(lower)) {
-            return 'FINANCIAL_METRIC';
-          }
-          if (/^(?:email|e-mail)\b/i.test(lower)) {
-            return 'EMAIL_ADDRESS';
-          }
-          if (/^(?:phone|telephone|tel|mobile|cell|fax)\b/i.test(lower)) {
-            return 'PHONE_NUMBER';
-          }
-          if (/^(?:address|home\s+address|work\s+address|residential\s+address|street)\b/i.test(lower)) {
-            return 'ADDRESS';
-          }
-          if (/^(?:medical|prescription|medication|dosage|blood\s+type|blood\s+group|immunisation|immunization|allergy|allergies|diagnosis|therapy)\b/i.test(lower)) {
-            return 'MEDICAL_RECORD';
-          }
-          if (/^(?:criminal|court|case\s+number|arrest|offence|offense|docket|property\s+deed|deed|power\s+of\s+attorney)\b/i.test(lower)) {
-            return 'LEGAL_REFERENCE';
-          }
-          if (/^(?:gps|coordinates|latitude|longitude|itinerary|location\s+history|check-in|wifi|ssid)\b/i.test(lower)) {
-            return 'LOCATION';
-          }
-          if (/^(?:ip\s+address|mac\s+address)\b/i.test(lower)) {
-            return 'IP_ADDRESS';
-          }
-          if (/^(?:website|homepage|url|domain)\b/i.test(lower)) {
-            return 'URL';
-          }
-          if (/^(?:company|organization|org|bank|employer|institution|hospital|university|school|church|union|association|club)\b/i.test(lower)) {
-            return 'ORGANIZATION';
-          }
-          if (/^(?:job\s+title|degree|transcript|gpa|test\s+score|fingerprint|retina|dna|political|religion|marital\s+status|sexual\s+orientation|ethnicity|hobby|dietary)\b/i.test(lower)) {
-            return 'CUSTOM_TERM';
-          }
-          return null;
-        });
+        const colClassifications = headerCells.map(h => classifyFieldLabel(h));
 
         // Scan subsequent data rows in the table
         let rowCharOffset = lineCharOffset + headerLine.length + 1 + sepLine.length + 1;
@@ -348,27 +409,29 @@ export class ContextDetector implements Detector {
           const rawCells = rowLine.split('|');
           const cells = rawCells.filter((_, idx) => !(idx === 0 && rawCells[0].trim() === '') && !(idx === rawCells.length - 1 && rawCells[rawCells.length - 1].trim() === ''));
 
-          for (let c = 0; c < cells.length && c < colTypes.length; c++) {
+          for (let c = 0; c < cells.length && c < colClassifications.length; c++) {
             const trimmedCell = cells[c].trim();
-            const targetType = colTypes[c];
+            const colClass = colClassifications[c];
 
-            if (targetType && trimmedCell.length >= 2 && !DISALLOWED_COMMON_WORDS.has(trimmedCell.toLowerCase())) {
+            if (colClass && trimmedCell.length >= 2 && !DISALLOWED_COMMON_WORDS.has(trimmedCell.toLowerCase())) {
               const cellIdxInRow = rowLine.indexOf(trimmedCell);
               if (cellIdxInRow !== -1) {
                 const cellValStart = rowCharOffset + cellIdxInRow;
                 const cellValEnd = cellValStart + trimmedCell.length;
 
+                const prefixKey = colClass.placeholderPrefix || colClass.entityType;
                 candidates.push({
-                  id: `context_table_${targetType.toLowerCase()}_${cellValStart}_${cellValEnd}`,
+                  id: `context_table_${prefixKey.toLowerCase()}_${cellValStart}_${cellValEnd}`,
                   start: cellValStart,
                   end: cellValEnd,
-                  entityType: targetType,
+                  entityType: colClass.entityType,
                   confidence: 0.98,
                   priority: this.priority + 10,
                   detectorId: this.id,
                   evidence: `Table Column Detector: Recognized "${trimmedCell}" in "${headerCells[c]}" column`,
                   atomic: true,
                   text: trimmedCell,
+                  placeholderPrefix: colClass.placeholderPrefix,
                 });
               }
             }
@@ -379,6 +442,151 @@ export class ContextDetector implements Detector {
       }
 
       lineCharOffset += headerLine.length + 1;
+    }
+
+    // General Key-Value Form & Colon Field Extractor (<Label>: <Value>)
+    // Automatically extracts values from any form field or structured document row,
+    // naming the placeholder dynamically by what is before the colon!
+    const docLines = text.split(/\r?\n/);
+    let docLineCharOffset = 0;
+    let lastAddressLineEnd = -1;
+
+    for (let lineIdx = 0; lineIdx < docLines.length; lineIdx++) {
+      const line = docLines[lineIdx];
+      const trimmedLine = line.trim();
+
+      // Check for Address continuation line immediately following an Address: field
+      // e.g. "Manchester, M1 4WX, United Kingdom"
+      if (lastAddressLineEnd !== -1 && lineIdx > 0 && docLineCharOffset === lastAddressLineEnd + 1) {
+        if (!trimmedLine.includes(':') && trimmedLine.length >= 3 && trimmedLine.length <= 80) {
+          const isAddressContinuation =
+            /,\s*/.test(trimmedLine) ||
+            /\b[A-Z]{1,2}\d[A-Z\d]?\s*\d[A-Z]{2}\b/i.test(trimmedLine) ||
+            /\b\d{5}(?:-\d{4})?\b/.test(trimmedLine) ||
+            /\b(?:Street|St|Road|Rd|Avenue|Ave|Lane|Ln|Drive|Dr|Way|Square|Sq|City|Town|County|State|Kingdom|UK|USA|England|Scotland|Wales)\b/i.test(trimmedLine);
+
+          if (isAddressContinuation) {
+            const start = docLineCharOffset + line.indexOf(trimmedLine);
+            const end = start + trimmedLine.length;
+            candidates.push({
+              id: `context_keyval_address_cont_${start}`,
+              start,
+              end,
+              entityType: 'ADDRESS',
+              confidence: 0.95,
+              priority: PriorityLevel.CONTEXT + 15,
+              detectorId: this.id,
+              evidence: `Context Engine: Multiline Address continuation ("${trimmedLine}")`,
+              atomic: true,
+              text: trimmedLine,
+              placeholderPrefix: 'ADDRESS',
+            });
+            lastAddressLineEnd = docLineCharOffset + line.length;
+            docLineCharOffset += line.length + 1;
+            continue;
+          }
+        }
+      }
+
+      // Match key-value pattern: [Label] : [Value] (ONLY colon ':', NEVER '=')
+      const kvMatch = line.match(/^\s*([A-Za-z][A-Za-z0-9\s/_\-()]{1,35}?)\s*:\s*(.+)$/);
+      if (kvMatch) {
+        const rawLabel = kvMatch[1].trim();
+        let rawValue = kvMatch[2].trim();
+
+        // If rawValue contains another colon (multiple inline fields or prose sentences with colons),
+        // let granular inline precursor rules handle each individual item
+        if (rawValue.includes(':')) {
+          docLineCharOffset += line.length + 1;
+          continue;
+        }
+
+        // Safety Filter on label
+        const labelWords = rawLabel.split(/\s+/);
+        const hasDisallowedLabelWord = labelWords.some(w =>
+          /^(?:item|items|data|budget|spend|cost|summary|overview|notes|note|warning|caution|important|tip|notice|info|example|hint|careful|profile|disclaimer|description|message|comment|details|update|status|log|step|steps|error|debug|response|output|result)$/i.test(w) ||
+          /^(?:for|about|during|this|that|these|those|between|through|under|over|with|without|from|into|onto|toward|towards)$/i.test(w) ||
+          /^(?:is|was|are|were|will|got|had|have|has|said|says|thought|commented)$/i.test(w)
+        );
+
+        const isDisallowedLabel =
+          labelWords.length > 4 ||
+          hasDisallowedLabelWord ||
+          /^(?:https?|ftp|file|mailto|tel|data|javascript|blob)$/i.test(rawLabel) ||
+          /^(?:const|let|var|function|type|interface|class|enum|export|import|public|private|protected|return|case|default|if|else|switch|for|while|try|catch)$/i.test(rawLabel) ||
+          /^(?:am|pm|jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec|\d+:\d+)$/i.test(rawLabel) ||
+          /^\d+$/.test(rawLabel);
+
+        // Safety Filter on value:
+        // Exclude sentence clauses starting with lowercase English words (e.g. "the staging DB password...", "a temporary key...")
+        const isSentenceValue = /^(?:the|a|an|this|that|these|those|it|its|we|you|he|she|they|there|here|is|was|are|were|will|can|could|should|would|to|from|with|in|on|at|by|for)\s+/i.test(rawValue);
+
+        // Exclude pure currency amounts (like $12,000 USD or £9,400) unless field is credit card / bank
+        const isPureCurrency = /^[$€£¥₦]\s*[\d,.]+(?:\s*[A-Z]{3})?$/.test(rawValue);
+
+        const isDisallowedValue =
+          !rawValue ||
+          rawValue.length < 1 ||
+          rawValue.length > 80 ||
+          isSentenceValue ||
+          isPureCurrency ||
+          /^[-–—\s/NnAa.]*$/.test(rawValue) ||
+          /^(?:true|false|null|undefined|none|n\/a|nil|0|\[empty\]|\*{3,})$/i.test(rawValue) ||
+          rawValue.startsWith('[[');
+
+        if (!isDisallowedLabel && !isDisallowedValue) {
+          // If value has trailing prose clause, trim it:
+          // e.g. "K0i!Fish&Pond#2026, please rotate before launch." -> "K0i!Fish&Pond#2026"
+          let valueToMask = rawValue;
+          const trailingProseMatch = valueToMask.match(/^(.*?)(?:,\s*(?:please|thanks|note|and|but|or|remember|before|after|if|which|because|as)\b|\.\s+[A-Z])/i);
+          if (trailingProseMatch && trailingProseMatch[1].trim().length > 0) {
+            valueToMask = trailingProseMatch[1].trim();
+          }
+
+          // If value has a role prefix like "Officer / Alex Morgan", preserve clean value
+          let prefixOffset = 0;
+          const rolePrefixMatch = valueToMask.match(/^(?:Officer|Agent|Inspector|Manager|Lead|User|Attending)\s*[\/:\-]\s*/i);
+          if (rolePrefixMatch) {
+            prefixOffset = rolePrefixMatch[0].length;
+            valueToMask = valueToMask.substring(prefixOffset).trim();
+          }
+
+          if (valueToMask.length > 0) {
+            const classification = classifyFieldLabel(rawLabel);
+
+            // Find exact start and end of value in the document
+            const colonIdx = line.indexOf(':');
+            const valueRelStart = line.indexOf(valueToMask, colonIdx + 1);
+            if (valueRelStart !== -1) {
+              const start = docLineCharOffset + valueRelStart;
+              const end = start + valueToMask.length;
+              const prefixKey = classification.placeholderPrefix || classification.entityType;
+
+              candidates.push({
+                id: `context_keyval_${prefixKey.toLowerCase()}_${start}`,
+                start,
+                end,
+                entityType: classification.entityType,
+                confidence: 0.97,
+                priority: PriorityLevel.CONTEXT + 14,
+                detectorId: this.id,
+                evidence: `Context Engine: General Key-Value field "${rawLabel}" ("${valueToMask}")`,
+                atomic: true,
+                text: valueToMask,
+                placeholderPrefix: classification.placeholderPrefix,
+              });
+
+              if (classification.entityType === 'ADDRESS') {
+                lastAddressLineEnd = docLineCharOffset + line.length;
+              } else {
+                lastAddressLineEnd = -1;
+              }
+            }
+          }
+        }
+      }
+
+      docLineCharOffset += line.length + 1;
     }
 
     for (const rule of CONTEXT_RULES) {
@@ -446,6 +654,7 @@ export class ContextDetector implements Detector {
           evidence: `${rule.reason} ("${matchText}")`,
           atomic: true,
           text: matchText,
+          placeholderPrefix: (rule as any).placeholderPrefix,
         });
       }
     }

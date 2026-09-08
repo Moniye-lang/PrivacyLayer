@@ -108,6 +108,22 @@ const STAGE1_RULES: RegexPatternRule[] = [
     reason: 'Personal Information Detector: SSN / National ID detected',
     confidence: 0.96,
   },
+  // 5b. UK National Insurance Number (NINO)
+  {
+    type: 'SSN_NATIONAL_ID',
+    category: 'IDENTIFIER',
+    pattern: /\b[A-CEGHJ-PR-TW-Z]{2}\s*\d{2}\s*\d{2}\s*\d{2}\s*[A-D]\b/gi,
+    reason: 'Personal Information Detector: UK National Insurance Number (NINO) detected',
+    confidence: 0.98,
+  },
+  // 5c. UK Driving Licence Number (e.g. HARTL911227OJ9AB)
+  {
+    type: 'SSN_NATIONAL_ID',
+    category: 'IDENTIFIER',
+    pattern: /\b[A-Z]{5}\d{6}[A-Z0-9]{5}\b/g,
+    reason: 'Personal Information Detector: UK Driving Licence Number detected',
+    confidence: 0.98,
+  },
   // 6. Passport Numbers
   {
     type: 'PASSPORT_NUMBER',
@@ -179,6 +195,14 @@ const STAGE1_RULES: RegexPatternRule[] = [
     pattern: /\b(?:ZIP|Postal Code|Postal)\s*[:=]?\s*([A-Z0-9]{3,5}[-\s]?[A-Z0-9]{3,4}|\d{5}(?:-\d{4})?)\b/gi,
     reason: 'Personal Information Detector: Postal / ZIP Code detected',
     confidence: 0.93,
+  },
+  // 13b. Standalone UK Postcodes (e.g. M1 4WX, SW1A 1AA, EC1A 1BB)
+  {
+    type: 'ADDRESS',
+    category: 'PII',
+    pattern: /\b[A-Z]{1,2}[0-9][A-Z0-9]?\s+[0-9][A-Z]{2}\b/g,
+    reason: 'Personal Information Detector: Standalone UK Postcode detected',
+    confidence: 0.94,
   },
   // 14. Source Code Environment Variables
   {

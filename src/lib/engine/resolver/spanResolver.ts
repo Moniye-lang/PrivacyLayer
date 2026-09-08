@@ -11,6 +11,7 @@ export interface ResolvedSpan {
   evidence: string;
   detectorId: string;
   text: string;
+  placeholderPrefix?: string;
   contributingDetections: CandidateDetection[];
 }
 
@@ -117,6 +118,7 @@ export class SpanResolver {
         evidence: candidate.evidence,
         detectorId: candidate.detectorId,
         text: trimmed.text,
+        placeholderPrefix: candidate.placeholderPrefix,
         contributingDetections: [candidate],
       };
 
@@ -172,6 +174,7 @@ export class SpanResolver {
               evidence: `${existing.evidence} | ${currentSpan.evidence}`,
               detectorId: dominant.detectorId,
               text: trimmedMerged.text,
+              placeholderPrefix: dominant.placeholderPrefix || existing.placeholderPrefix || currentSpan.placeholderPrefix,
               contributingDetections: [...existing.contributingDetections, ...currentSpan.contributingDetections],
             };
             subsumedOrMerged = true;

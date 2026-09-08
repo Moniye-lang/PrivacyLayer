@@ -60,6 +60,7 @@ export interface CandidateDetection {
   evidence: string; // Sanitized, non-sensitive explanation
   atomic: boolean; // Flag if candidate cannot be partially split
   text: string; // Matched raw plaintext segment
+  placeholderPrefix?: string; // Optional custom prefix derived dynamically from field label before colon
 }
 
 export interface DetectorVote {
@@ -79,6 +80,7 @@ export interface DetectedEntity {
   confidence: number; // 0.0 - 1.0
   reason: string;
   placeholder: string; // e.g. "[[PERSON_NAME_001]]"
+  placeholderPrefix?: string; // Custom prefix derived from field label
   votes?: DetectorVote[];
 }
 

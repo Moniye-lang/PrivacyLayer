@@ -73,7 +73,6 @@ export const PERSONAL_DATA_CONTEXT_RULES: ContextPrecursorRule[] = [
     reason: 'Context Engine: Identification Number precursor',
     confidence: 0.99,
     priority: PriorityLevel.REGEX + 15,
-    placeholderPrefix: 'SSN',
   },
   {
     type: 'EMPLOYEE_ID',
@@ -339,7 +338,6 @@ export const PERSONAL_DATA_CONTEXT_RULES: ContextPrecursorRule[] = [
     reason: 'Context Engine: Device IMEI precursor',
     confidence: 0.99,
     priority: PriorityLevel.REGEX + 20,
-    placeholderPrefix: 'SSN',
   },
   {
     type: 'CUSTOM_TERM',
@@ -494,7 +492,7 @@ export const PERSONAL_DATA_CONTEXT_RULES: ContextPrecursorRule[] = [
   {
     type: 'CUSTOM_TERM',
     category: 'CUSTOM',
-    pattern: /\b(?:Certifications?|Professional\s+Certificate|Accreditations?|Portfolio|References?|Professional\s+References?|Awards?\s+and\s+Honors?)\s*[:=]\s*["']?([^"'\r\n;|]+)["']?/gi,
+    pattern: /\b(?:Certifications?|Professional\s+Certificate|Accreditations?|Portfolio|Professional\s+References?|(?<!Case\s+)References?|Awards?\s+and\s+Honors?)\s*[:=]\s*["']?([^"'\r\n;|]+)["']?/gi,
     groupIndex: 1,
     reason: 'Context Engine: Professional Qualifications precursor',
     confidence: 0.98,
@@ -533,7 +531,6 @@ export const PERSONAL_DATA_CONTEXT_RULES: ContextPrecursorRule[] = [
     reason: 'Context Engine: Vehicle Registration precursor',
     confidence: 0.99,
     priority: PriorityLevel.REGEX + 15,
-    placeholderPrefix: 'SSN',
   },
   {
     type: 'URL',
@@ -613,7 +610,6 @@ export const PERSONAL_DATA_CONTEXT_RULES: ContextPrecursorRule[] = [
     reason: 'Context Engine: Military / Voter Identification precursor',
     confidence: 0.98,
     priority: PriorityLevel.REGEX + 15,
-    placeholderPrefix: 'SSN',
   },
 
   // 32. Immigration Status

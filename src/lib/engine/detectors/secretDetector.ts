@@ -423,7 +423,7 @@ const SECRET_PATTERNS: SecretPatternRule[] = [
   {
     type: 'CUSTOM_TERM',
     name: 'Order / Ticket / Reference ID',
-    pattern: /(?:#(?:ORD|TICK|TCK|REF|INV|CASE|TICKET|ORDER)-[0-9A-Za-z_-]{3,30}|\b(?:order|ticket|ref|invoice|case|tracking)\s*(?:#|id|num|number)?\s*[:=]?\s*#?([A-Z0-9]{2,10}-[0-9A-Za-z_-]{3,30}|[A-Z0-9_]{6,30})\b)/gi,
+    pattern: /(?:#(?:ORD|TICK|TCK|REF|INV|CASE|TICKET|ORDER)-[0-9A-Za-z_-]{3,30}|\b(?:order|ticket|ref(?:erence)?|invoice|case(?:\s+reference)?|tracking)\s*(?:#|id|num|number)?\s*(?:[:=]\s*#?|#)\s*([A-Z0-9]{2,10}-[0-9A-Za-z_-]{3,30}|[A-Z0-9_]{6,30})\b)/gi,
     reason: 'Context rule: Order / Ticket / Case Reference ID',
     confidence: 0.98,
     priority: MID_PRIO,

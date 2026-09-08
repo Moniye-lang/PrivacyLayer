@@ -885,7 +885,8 @@ export async function autoDetectImageSensitiveRegionsServer(
       let globalIndex = 1;
 
       for (const entity of pipelineEntities) {
-        const placeholder = `[[${entity.type}_${String(globalIndex).padStart(3, '0')}]]`;
+        const prefix = (entity.placeholderPrefix || entity.type).toUpperCase();
+        const placeholder = `[[${prefix}_${String(globalIndex).padStart(3, '0')}]]`;
         const rects = findPreciseEntityBoundingBoxes(entity, regions, allWords, svgDims.width, svgDims.height, globalIndex, 0);
 
         for (const r of rects) {
@@ -1048,7 +1049,7 @@ export async function autoDetectImageSensitiveRegionsServer(
       entityValueOccurrenceCount.set(normalizedValue, occIdx + 1);
 
       let placeholder = valueToPlaceholderMap.get(normalizedValue);
-      const typeKey = entity.type.toUpperCase();
+      const typeKey = (entity.placeholderPrefix || entity.type).toUpperCase();
 
       if (!placeholder) {
         typeCounters[typeKey] = (typeCounters[typeKey] || 0) + 1;
