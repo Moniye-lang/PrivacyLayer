@@ -251,6 +251,38 @@ describe('Automated (Non-Manual) Image Shielding Test Suite', () => {
     expect(textMatches[0]).toContain('[[API_KEY_001]]');
   });
 
+  test('Issue 10: Distinct occurrences of the same entity (e.g. repeated sender in chat logs) both render placeholder labels', async () => {
+    // Two distinct messages where the same user [[PERSON_NAME_001]] speaks
+    const distinctSelections = [
+      {
+        id: 'msg_1_sender',
+        rect: { x: 50, y: 80, width: 120, height: 24 },
+        entityType: 'PERSON_NAME' as const,
+        assignedPlaceholder: '[[PERSON_NAME_001]]',
+        evidence: 'Sender header at 9:16 AM',
+      },
+      {
+        id: 'msg_2_sender',
+        rect: { x: 50, y: 220, width: 120, height: 24 },
+        entityType: 'PERSON_NAME' as const,
+        assignedPlaceholder: '[[PERSON_NAME_001]]',
+        evidence: 'Sender header at 9:20 AM',
+      },
+    ];
+
+    const { svgXml } = await composeShieldedImageWithSvg(sampleImageDataUrl, distinctSelections);
+
+    // Both boxes must have <rect> elements drawn
+    const rectCount = (svgXml.match(/<rect /g) || []).length;
+    expect(rectCount).toBe(2);
+
+    // Both occurrences must render their <text> labels
+    const textMatches = svgXml.match(/<text [^>]*>([^<]+)<\/text>/g) || [];
+    expect(textMatches.length).toBe(2);
+    expect(textMatches[0]).toContain('[[PERSON_NAME_001]]');
+    expect(textMatches[1]).toContain('[[PERSON_NAME_001]]');
+  });
+
   test('Reveal: Safely restores shielded regions regardless of whether stored placeholder had brackets', async () => {
     const revealEngine = new ImageRevealEngine();
 

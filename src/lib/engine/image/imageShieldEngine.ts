@@ -11,6 +11,7 @@ import {
 import { AESGCMEncryptionProvider, NoOpEncryptionProvider } from '../../security/encryptionProvider';
 import { revealStoreInstance } from '../../security/revealStore';
 import { composeShieldedImageWithSvg } from './svgImageCompositor';
+import { isLineWrappedContinuationBox } from './imageGeometry';
 
 const encryptionProvider: EncryptionProvider =
   process.env.NODE_ENV === 'production'
@@ -48,8 +49,6 @@ export async function renderShieldedImageCanvas(
         ctx.drawImage(img, 0, 0, width, height);
 
         // Extract original crop & render placeholders in native image resolution
-        const renderedPlaceholders = new Set<string>();
-
         for (const sel of selections) {
           // sel.rect is ALREADY in native image coordinates (0..width, 0..height)
           const x = Math.max(0, Math.min(width - 10, Math.round(sel.rect.x)));
@@ -80,11 +79,9 @@ export async function renderShieldedImageCanvas(
           ctx.strokeRect(x + 0.5, y + 0.5, rectW - 1, rectH - 1);
 
           // Line-wrapped secrets: render text only once in first box
-          const placeholderKey = sel.assignedPlaceholder;
-          if (renderedPlaceholders.has(placeholderKey)) {
+          if (isLineWrappedContinuationBox(sel, selections)) {
             continue;
           }
-          renderedPlaceholders.add(placeholderKey);
 
           // 4. Calculate dynamic font size to fit placeholder text perfectly inside rectW
           let text = sel.assignedPlaceholder;

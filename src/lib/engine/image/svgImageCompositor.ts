@@ -1,5 +1,5 @@
 import { ImageSelection } from '../../../types';
-import { getAbbreviatedPlaceholder } from './imageGeometry';
+import { getAbbreviatedPlaceholder, isLineWrappedContinuationBox } from './imageGeometry';
 
 export interface SvgCompositorResult {
   shieldedImageDataUrl: string;
@@ -44,8 +44,6 @@ export async function composeShieldedImageWithSvg(
         svgElements.push(`<image href="${imageDataUrl}" x="0" y="0" width="${nativeWidth}" height="${nativeHeight}" />`);
 
         // 2. Composite mask rectangles and cyan placeholder text directly in native pixel coordinates
-        const renderedPlaceholders = new Set<string>();
-
         for (const sel of selections) {
           // sel.rect is ALREADY in native image pixels (0..nativeWidth, 0..nativeHeight)
           const nativeX = Math.max(0, Math.min(nativeWidth - 4, Math.round(sel.rect.x)));
@@ -73,13 +71,11 @@ export async function composeShieldedImageWithSvg(
             `<rect x="${nativeX}" y="${nativeY}" width="${rectW}" height="${rectH}" fill="#0f172a" rx="2" ry="2" />`
           );
 
-          // Line-wrapped secret handling: Only render placeholder label once in first box.
-          // Subsequent boxes of the same secret remain plain redaction bars without repeated text.
-          const placeholderKey = sel.assignedPlaceholder;
-          if (renderedPlaceholders.has(placeholderKey)) {
+          // Line-wrapped secret handling: Only omit label if box is an immediately adjacent continuation
+          // line of a multi-line wrapped secret. Distinct entity occurrences always display their labels.
+          if (isLineWrappedContinuationBox(sel, selections)) {
             continue;
           }
-          renderedPlaceholders.add(placeholderKey);
 
           // Responsive monospace font sizing scaled to native region dimensions
           let fullText = sel.assignedPlaceholder;
@@ -166,7 +162,6 @@ export async function composeShieldedImageWithSvg(
     const svgElements: string[] = [
       `<image href="${imageDataUrl}" x="0" y="0" width="${nativeWidth}" height="${nativeHeight}" />`
     ];
-    const renderedPlaceholders = new Set<string>();
 
     for (const sel of selections) {
       // 1. Extract exact original pixel crop
@@ -181,10 +176,8 @@ export async function composeShieldedImageWithSvg(
         `<rect x="${sel.rect.x}" y="${sel.rect.y}" width="${sel.rect.width}" height="${sel.rect.height}" fill="#0f172a" rx="2" ry="2" />`
       );
 
-      // Line-wrapped secret deduplication: only render text label for first box
-      const placeholderKey = sel.assignedPlaceholder;
-      if (!renderedPlaceholders.has(placeholderKey)) {
-        renderedPlaceholders.add(placeholderKey);
+      // Line-wrapped secret deduplication: only omit label if box is an adjacent continuation line
+      if (!isLineWrappedContinuationBox(sel, selections)) {
         let ph = sel.assignedPlaceholder;
         if (!ph.startsWith('[[')) {
           ph = `[[${ph.replace(/^\[*|\]*$/g, '')}]]`;
@@ -213,20 +206,17 @@ export async function composeShieldedImageWithSvg(
       `<image href="${imageDataUrl}" x="0" y="0" width="${mockWidth}" height="${mockHeight}" />`
     ];
 
-    const renderedMockPlaceholders = new Set<string>();
     for (const sel of selections) {
       originalCrops.set(sel.id, `data:image/png;base64,synthetic_crop_${sel.id}`);
       svgElements.push(
         `<rect x="${sel.rect.x}" y="${sel.rect.y}" width="${sel.rect.width}" height="${sel.rect.height}" fill="#0f172a" />`
       );
 
-      let placeholderText = sel.assignedPlaceholder;
-      if (!placeholderText.startsWith('[[')) {
-        placeholderText = `[[${placeholderText.replace(/^\[*|\]*$/g, '')}]]`;
-      }
-
-      if (!renderedMockPlaceholders.has(placeholderText)) {
-        renderedMockPlaceholders.add(placeholderText);
+      if (!isLineWrappedContinuationBox(sel, selections)) {
+        let placeholderText = sel.assignedPlaceholder;
+        if (!placeholderText.startsWith('[[')) {
+          placeholderText = `[[${placeholderText.replace(/^\[*|\]*$/g, '')}]]`;
+        }
         svgElements.push(
           `<text x="${sel.rect.x + sel.rect.width / 2}" y="${sel.rect.y + sel.rect.height / 2}" fill="#00f0ff" font-family="monospace">${placeholderText}</text>`
         );
