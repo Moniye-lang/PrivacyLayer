@@ -1,4 +1,4 @@
-iname: Intelligence Driven Masking CI/CD
+name: Intelligence Driven Masking CI/CD
 
 on:
   push:
