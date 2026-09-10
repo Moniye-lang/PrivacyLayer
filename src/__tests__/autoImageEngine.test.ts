@@ -225,15 +225,19 @@ describe('Automated (Non-Manual) Image Shielding Test Suite', () => {
         id: 'line_1_box',
         rect: { x: 50, y: 100, width: 180, height: 28 },
         entityType: 'API_KEY' as const,
+        placeholder: '[[API_KEY_001]]',
         assignedPlaceholder: '[[API_KEY_001]]',
         evidence: 'Wrapped secret line 1',
+        priority: 1,
       },
       {
         id: 'line_2_box',
         rect: { x: 50, y: 135, width: 220, height: 28 },
         entityType: 'API_KEY' as const,
+        placeholder: '[[API_KEY_001]]',
         assignedPlaceholder: '[[API_KEY_001]]',
         evidence: 'Wrapped secret line 2',
+        priority: 1,
       },
     ];
 
@@ -258,15 +262,19 @@ describe('Automated (Non-Manual) Image Shielding Test Suite', () => {
         id: 'msg_1_sender',
         rect: { x: 50, y: 80, width: 120, height: 24 },
         entityType: 'PERSON_NAME' as const,
+        placeholder: '[[PERSON_NAME_001]]',
         assignedPlaceholder: '[[PERSON_NAME_001]]',
         evidence: 'Sender header at 9:16 AM',
+        priority: 1,
       },
       {
         id: 'msg_2_sender',
         rect: { x: 50, y: 220, width: 120, height: 24 },
         entityType: 'PERSON_NAME' as const,
+        placeholder: '[[PERSON_NAME_001]]',
         assignedPlaceholder: '[[PERSON_NAME_001]]',
         evidence: 'Sender header at 9:20 AM',
+        priority: 1,
       },
     ];
 

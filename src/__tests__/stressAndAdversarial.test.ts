@@ -359,7 +359,8 @@ describe('🔥 Extreme Stress, Adversarial & Chaos Testing Suite', () => {
           },
           placeholder: `[[SECRET_${String(i + 1).padStart(3, '0')}]]`,
           entityType: 'API_KEY',
-          confidence: 0.95,
+          evidence: 'Stress test synthetic secret',
+          priority: 1,
         });
       }
 

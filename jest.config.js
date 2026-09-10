@@ -27,6 +27,9 @@ const config = {
     '/node_modules/',
     '/.next/',
   ],
+  modulePathIgnorePatterns: [
+    '<rootDir>/.next/',
+  ],
   // Coverage setup
   collectCoverageFrom: [
     'src/lib/**/*.ts',
