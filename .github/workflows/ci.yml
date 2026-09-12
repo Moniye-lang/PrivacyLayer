@@ -136,6 +136,7 @@ jobs:
           context: .
           file: ./Dockerfile
           push: false
+          load: true
           tags: intelligence-mask:ci-test
           cache-from: type=gha
           cache-to: type=gha,mode=max
@@ -156,7 +157,7 @@ jobs:
             echo "✅ Container healthcheck PASSED"
           else
             echo "❌ Container healthcheck FAILED with status: $STATUS"
-            docker logs idm-test
+            docker logs idm-test || true
             exit 1
           fi
 
@@ -177,7 +178,7 @@ jobs:
 
       - name: Stop test container
         if: always()
-        run: docker stop idm-test && docker rm idm-test
+        run: docker rm -f idm-test || true
 
   # ─────────────────────────────────────────────
   # Job 5: Docker Registry Push (main only)
