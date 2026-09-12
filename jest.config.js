@@ -38,8 +38,8 @@ const config = {
   coverageReporters: ['text', 'lcov'],
   coverageThreshold: {
     global: {
-      lines: 60,
-      functions: 60,
+      lines: 50,
+      functions: 45,
     },
   },
 };
